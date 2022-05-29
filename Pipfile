@@ -8,6 +8,8 @@ requests = "*"
 CloudFlare = "*"
 validators = "*"
 toml = "*"
+PyDomainExtractor = "*"
+click = "*"
 
 [dev-packages]
 pre-commit = "*"
