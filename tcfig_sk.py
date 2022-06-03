@@ -17,19 +17,14 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
-import argparse
 import os
-import pathlib
 import re
 import typing
 
-import click
 import CloudFlare
 import pydomainextractor
 import requests
-import requests as curl
 import toml
-import validators
 from requests.auth import HTTPBasicAuth
 
 domain_extractor = pydomainextractor.DomainExtractor()
@@ -50,9 +45,14 @@ def get_credentials() -> typing.Union[dict, typing.MutableMapping]:
     if os.path.isfile("config.toml"):  # Checks for config file existence
         credentials = toml.load(open(config_file_name,
                                      "rt"))  # Load credentials dict
+        global auth
+        auth = credentials['API']['auth']
         return credentials
     else:
         raise FileNotFoundError("Check that config file is correctly named")
+
+
+# CF
 
 
 def cf_get_zones(
@@ -74,7 +74,8 @@ def cf_get_zones(
     return cf_zone_list  # Returns the zone list
 
 
-def cf_parse_zones(cf_zone_list: typing.List[dict]) -> typing.List[str]:
+def cf_parse_zones(
+        cf_zone_list: typing.List[dict]) -> typing.List[typing.Dict[str, str]]:
     """
     Extract domains from the CF zone list
 
@@ -84,16 +85,16 @@ def cf_parse_zones(cf_zone_list: typing.List[dict]) -> typing.List[str]:
     :rtype: list[str]
     """
     cf_domains = []  # List of the domains of the account
-    for zone in cf_zone_list:
+    for index, zone in enumerate(cf_zone_list):
         if zone['status'] != "active" or "#dns_records:edit" not in zone[
                 'permissions']:  # Check permission and status
             continue
-        cf_domains.append(zone['name'])
+        cf_domains.append({'id': zone["id"], 'name': zone["name"]})
     return cf_domains
 
 
 def cf_check_sld(parsed_subdomains: typing.List[dict],
-                 cf_domains: typing.List[str]) -> typing.List[dict]:
+                 cf_domains: typing.Dict[str, str]) -> typing.List[dict]:
     """
     Check what domains are in the user's account
 
@@ -114,6 +115,9 @@ def cf_check_sld(parsed_subdomains: typing.List[dict],
 
 def cf_check_for_existence(domain_list: list[dict]):
     pass
+
+
+# TRAEFIK :
 
 
 def tfk_get_routers(
