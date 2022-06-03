@@ -6,7 +6,10 @@ repos:
       - id: check-docstring-first
       - id: check-toml
       - id: check-yaml
+      - id: check-case-conflict
+      - id: check-vcs-permalinks
       - id: debug-statements
+      - id: destroyed-symlinks
       - id: detect-private-key
       - id: end-of-file-fixer
       - id: fix-encoding-pragma
@@ -31,3 +34,17 @@ repos:
     rev: 2.1.6
     hooks:
       - id: forbid-binary
+      - id: git-dirty
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.2.0
+    hooks:
+      - id: remove-crlf
+      - id: remove-tabs
+  - repo: https://github.com/zricethezav/gitleaks
+    rev: v8.8.7
+    hooks:
+      - id: gitleaks
+  - repo: https://github.com/jlebar/pre-commit-hooks.git
+    rev: 62ca83b
+    hooks:
+      - id: do-not-submit

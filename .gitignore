@@ -654,6 +654,7 @@ cython_debug/
 .idea/**/usage.statistics.xml
 .idea/**/dictionaries
 .idea/**/shelf
+.idea/**/solarlint
 
 # Generated files
 .idea/**/contentModel.xml
