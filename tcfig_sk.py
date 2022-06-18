@@ -35,7 +35,7 @@ config_file_name = "config.toml"
 auth = True
 
 
-def get_credentials() -> typing.Union[dict, typing.MutableMapping]:
+def get_credentials() -> typing.MutableMapping:
     """
     Get the credentials from the config file
 
@@ -43,9 +43,9 @@ def get_credentials() -> typing.Union[dict, typing.MutableMapping]:
     :rtype: Union[dict, MutableMapping]
     """
     if os.path.isfile("config.toml"):  # Checks for config file existence
-        credentials = toml.load(open(config_file_name, "rt"))  # Load credentials dict
+        credentials: typing.MutableMapping = toml.load(open(config_file_name, "rt"))  # Load credentials dict
         global auth
-        auth = credentials['API']['auth']
+        auth: bool = credentials['API']['auth']
         return credentials
     else:
         raise FileNotFoundError("Check that config file is correctly named")
@@ -64,10 +64,10 @@ def cf_get_zones(credentials: typing.Union[dict, typing.MutableMapping]) -> typi
     """
     try:
         cf = CloudFlare.CloudFlare(token=credentials["CF"]["api_token"])  # Instantiate a CF class
-        cf_zone_list: typing.List[dict] = cf.zones.get()  # Get the zone list
+        zone_list: typing.List[dict] = cf.zones.get()  # Get the zone list
     except CloudFlare.CloudFlareAPIError:
         raise LookupError("The provided API token is likely not valid")
-    return cf_zone_list  # Returns the zone list
+    return zone_list  # Returns the zone list
 
 
 def cf_parse_zones(cf_zone_list: typing.List[dict]) -> typing.List[typing.Dict[str, str]]:
@@ -87,26 +87,26 @@ def cf_parse_zones(cf_zone_list: typing.List[dict]) -> typing.List[typing.Dict[s
     return cf_domains
 
 
-def cf_check_sld(parsed_subdomains: typing.List[dict], cf_domains: typing.Dict[str, str]) -> typing.List[dict]:
+def cf_check_sld(parsed_domains: typing.List[dict], cf_domains: typing.Dict[str, str]) -> typing.List[dict]:
     """
     Check what domains are in the user's account
 
-    :param parsed_subdomains: Extracted domain info
-    :type parsed_subdomains: list[dict]
+    :param parsed_domains: Extracted domain info
+    :type parsed_domains: list[dict]
     :param cf_domains: List of valid domains
     :type cf_domains: list[str]
     .. seealso:: cf_parse_zones()
     :return: List of existing domains to parse
     :return: list[dict]
     """
-    for index, domain in enumerate(parsed_subdomains):
+    for index, domain in enumerate(parsed_domains):
         domain_to_check: str = domain["domain"] + domain["suffix"]
         if domain_to_check not in cf_domains:
-            parsed_subdomains.pop(index)
-    return parsed_subdomains
+            parsed_domains.pop(index)
+    return parsed_domains
 
 
-def cf_check_for_existence(domain_list: list[dict]):
+def cf_check_for_existence(domain_list: typing.List[typing.Dict]):
     pass
 
 
@@ -189,7 +189,12 @@ def utils_extract_subdomains(domains: typing.List[str]) -> typing.List[dict]:
     :return: List of parsed subdomains
     :rtype: list[dict]
     """
-    parsed_subdomains: typing.List[dict] = []
+    parsed_domains: typing.List[dict] = []
     for domain in domains:
-        parsed_subdomains.append(domain_extractor.extract(domain))  # Extract domain and sub from domain
-    return parsed_subdomains
+        parsed_domains.append(domain_extractor.extract(domain))  # Extract domain and sub from domain
+    return parsed_domains
+
+
+if __name__ == '__main__':
+    credentials_run = get_credentials()
+    cf_zone_list = cf_get_zones(credentials=credentials_run)
