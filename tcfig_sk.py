@@ -113,8 +113,23 @@ def cf_check_sld(parsed_subdomains: typing.List[dict],
     return parsed_subdomains
 
 
-def cf_check_for_existence(domain_list: list[dict]):
-    pass
+def cf_check_existence(cf_domains: typing.List[dict],
+                       tfk_subdomains: typing.List[dict]):
+    """
+    Check if any subdomains are
+
+    :param cf_domains:
+    :param tfk_subdomains:
+    :return:
+    """
+
+
+def cf_check_tld_existence(cf_domains: typing.List[dict],
+                           tfk_subdomains: typing.List[dict]):
+    for entry in tfk_subdomains:
+        domain = entry['domain'] + '.' + entry['suffix']
+        if domain not in cf_domains:
+            cf_domains.remove(entry)
 
 
 # TRAEFIK :
@@ -172,10 +187,10 @@ def tfk_parse_routers(traefik_routers: typing.List[dict]):
                     router['rule'])  # Append to logical list
                 basic_host_rules.remove(
                     router['rule'])  # Remove from basic list
-    basic_domains = tfk_parse_basic_rules(host_rules=basic_host_rules)
+    tfk_domains = tfk_parse_basic_rules(host_rules=basic_host_rules)
     if len(logical_host_rules) > 0:
         print("WARNING, LOGICAL RULES AREN'T IMPLEMENTED AND WILL BE IGNORED")
-    return basic_domains
+    return tfk_domains
 
 
 def tfk_parse_basic_rules(host_rules: typing.List[str]) -> typing.List[str]:
@@ -211,8 +226,8 @@ def utils_extract_subdomains(domains: typing.List[str]) -> typing.List[dict]:
     :return: List of parsed subdomains
     :rtype: list[dict]
     """
-    parsed_subdomains: typing.List[dict] = []
+    subdomain_list: typing.List[dict] = []
     for domain in domains:
-        parsed_subdomains.append(domain_extractor.extract(
+        subdomain_list.append(domain_extractor.extract(
             domain))  # Extract domain and sub from domain
-    return parsed_subdomains
+    return subdomain_list
