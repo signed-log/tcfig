@@ -92,40 +92,66 @@ def cf_parse_zones(cf_zone_list: typing.List[dict]) -> typing.List[typing.Dict[s
     return cf_domains
 
 
-def cf_check_sld(parsed_subdomains: typing.List[dict], cf_domains: typing.Dict[str, str]) -> typing.List[dict]:
+def cf_check_tld_existence(cf_domains: typing.List[dict], tfk_subdomains: typing.List[dict]) -> typing.Tuple[list[dict], list[dict]]:
     """
-    Check what domains are in the user's account
+    Check if the TLDs in routers are actually on the CF's user zone
 
-    :param parsed_subdomains: Extracted domain info
-    :type parsed_subdomains: list[dict]
-    :param cf_domains: List of valid domains
-    :type cf_domains: list[str]
-    .. seealso:: cf_parse_zones()
-    :return: List of existing domains to parse
-    :return: list[dict]
+    :param cf_domains: List of all domains in the CF's user zone along with the zone ID
+    :type cf_domains: list[dict]
+    :param tfk_subdomains: List of computed (split between TLD, SLD, 3LD...)
+    :return: Checked TLD list against CF and TFK
+    :rtype: list[dict]
     """
-    for index, domain in enumerate(parsed_subdomains):
-        domain_to_check: str = domain["domain"] + domain["suffix"]
-        if domain_to_check not in cf_domains:
-            parsed_subdomains.pop(index)
-    return parsed_subdomains
+    cf_domains_verified = []
+    tfk_subdomains_verified = []
+    for entry in tfk_subdomains:
+        # Recreate the TLD
+        domain = f"{entry['domain']}.{entry['suffix']}"
+        for cf_pair in cf_domains:
+            # If domain in cf_domains
+            if domain == cf_pair["name"]:
+                # Append to verified list
+                if cf_pair not in cf_domains_verified:
+                    cf_domains_verified.append(cf_pair)
+                if entry not in tfk_subdomains_verified:
+                    tfk_subdomains_verified.append(entry)
+                break
+    return cf_domains_verified, tfk_subdomains_verified
 
 
-def cf_check_existence(cf_domains: typing.List[dict], tfk_subdomains: typing.List[dict]):
+def cf_check_existence(cf_domains: typing.List[dict],
+                       tfk_subdomains: typing.List[dict],
+                       credentials: typing.Union[dict, typing.MutableMapping]):
     """
     Check if any subdomains are already in the zone
 
-    :param cf_domains:
+    :param cf_domains: List of domains in the CF's user zone along with the zone ID
+    :type cf_domains: list[dict]
     :param tfk_subdomains:
-    :return:
+    :param credentials: Credentials file
+    :return: Computed domains not in CF
     """
-
-
-def cf_check_tld_existence(cf_domains: typing.List[dict], tfk_subdomains: typing.List[dict]):
-    for entry in tfk_subdomains:
-        domain = entry['domain'] + '.' + entry['suffix']
-        if domain not in cf_domains:
-            cf_domains.remove(entry)
+    # Instantiate a CF class
+    cf = CloudFlare.CloudFlare(token=credentials["CF"]["api_token"])
+    dns_records = []
+    # Query a dump of the DNS zones
+    for zones in cf_domains:
+        dns_records.append(cf.zones.dns_records.get(zones["id"]))
+    # Iterate over all the domains
+    for entry in tfk_subdomains[:]:
+        # Iterate over the dns_records list
+        # Recreate the TLD
+        domain = f"{entry['subdomain']}.{entry['domain']}.{entry['suffix']}"
+        for zone in dns_records:
+            for record in zone:
+                # If already exists
+                if domain == record["name"]:
+                    # Remove from the list of domains
+                    try:
+                        tfk_subdomains.remove(entry)
+                    except ValueError:
+                        pass
+    return tfk_subdomains
 
 
 # TRAEFIK :
@@ -146,41 +172,40 @@ def tfk_get_routers(credentials: typing.Union[dict, typing.MutableMapping]) -> t
         with requests.get(url) as api_query:
             api_query.raise_for_status()
             # Get the list of HTTP Routers
-            traefik_routers: typing.List[dict] = api_query.json()
-            return traefik_routers
+            tfk_routers: typing.List[dict] = api_query.json()
+            return tfk_routers
     else:
         # Only HTTPBasicAuth is currently supported
         with requests.get(url, auth=HTTPBasicAuth(username=credentials["API"]["user"],
                                                   password=credentials["API"]["pass"])) as api_query:
             api_query.raise_for_status()
             # Get the list of HTTP Routers
-            traefik_routers: typing.List[dict] = api_query.json()
-            return traefik_routers
+            tfk_routers: typing.List[dict] = api_query.json()
+            return tfk_routers
 
 
-def tfk_parse_routers(traefik_routers: typing.List[dict]):
+def tfk_parse_routers(tfk_routers: typing.List[dict]):
     """
     Parse the Traefik HTTP routers list
 
-    :param traefik_routers: Raw list of HTTP routers
-    :type traefik_routers: list
+    :param tfk_routers: Raw list of HTTP routers
+    :type tfk_routers: list
     .. todo:: Take the state of the rule in mind
     """
     # Basic Host(`example.com`) rule
     basic_host_rules: list = []
     # Logical ((Host(`example.com`) && Path(`/traefik`))) rules to unpack
     logical_host_rules: list = []
-    for router in traefik_routers:
+    for router in tfk_routers:
         # Checks if it's an Host rule
         if 'Host' in router['rule']:
-            # Appends to the basic list
-            basic_host_rules.append(router['rule'])
             # If logical operator
             if '&&' in router['rule'] or '||' in router['rule'] or "!" in router['rule']:
                 # Append to logical list
                 logical_host_rules.append(router['rule'])
-                # Remove from basic list
-                basic_host_rules.remove(router['rule'])
+            else:
+                # Append to the basic list
+                basic_host_rules.append(router['rule'])
     tfk_domains = tfk_parse_basic_rules(host_rules=basic_host_rules)
     if len(logical_host_rules) > 0:
         print("WARNING, LOGICAL RULES AREN'T IMPLEMENTED AND WILL BE IGNORED")
@@ -196,7 +221,7 @@ def tfk_parse_basic_rules(host_rules: typing.List[str]) -> typing.List[str]:
     :return: List of domains extracted
     :rtype: list
     """
-    basic_domains = []
+    basic_domains: typing.List[str] = []
     # Only those characters are allowed in domains
     regex = re.compile(r"[a-z\d\-.]*", re.IGNORECASE | re.VERBOSE)
     for rule in host_rules:
@@ -223,3 +248,21 @@ def utils_extract_subdomains(domains: typing.List[str]) -> typing.List[dict]:
         # Extract domain and sub from domain
         subdomain_list.append(domain_extractor.extract(domain))
     return subdomain_list
+
+
+if __name__ == '__main__':
+    credentials = get_credentials()
+    # CF
+    cf_zone_list = cf_get_zones(credentials)
+    cf_domains = cf_parse_zones(cf_zone_list)
+    # TFK
+    tfk_routers = tfk_get_routers(credentials)
+    tfk_domains = tfk_parse_routers(tfk_routers)
+    tfk_subdomains = utils_extract_subdomains(tfk_domains)
+    # Checks
+    cf_domains_verified, tfk_subdomains_verified = cf_check_tld_existence(
+        cf_domains, tfk_subdomains)
+    tfk_subdomains_verified = cf_check_existence(
+        cf_domains_verified, tfk_subdomains_verified, credentials)
+    if len(tfk_subdomains_verified) < 1:
+        exit(128)
