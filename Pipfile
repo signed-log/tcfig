@@ -13,7 +13,8 @@ click = "*"
 
 [dev-packages]
 pre-commit = "*"
-yapf = "*"
+autopep8 = "*"
+"pylama[all]" = "*"
 
 [requires]
 python_version = "3"

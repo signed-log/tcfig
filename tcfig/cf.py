@@ -3,7 +3,6 @@ import CloudFlare
 
 
 class CF:
-
     def __init__(self, cf_token):
         self.cf_instance = CloudFlare.CloudFlare(token=cf_token)
 

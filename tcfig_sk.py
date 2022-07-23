@@ -43,8 +43,8 @@ def get_credentials() -> typing.Union[dict, typing.MutableMapping]:
     :rtype: Union[dict, MutableMapping]
     """
     if os.path.isfile("config.toml"):  # Checks for config file existence
-        credentials = toml.load(open(config_file_name,
-                                     "rt"))  # Load credentials dict
+        # Load credentials dict
+        credentials = toml.load(open(config_file_name, "rt"))
         global auth
         auth = credentials['API']['auth']
         return credentials
@@ -55,9 +55,7 @@ def get_credentials() -> typing.Union[dict, typing.MutableMapping]:
 # CF
 
 
-def cf_get_zones(
-    credentials: typing.Union[dict,
-                              typing.MutableMapping]) -> typing.List[dict]:
+def cf_get_zones(credentials: typing.Union[dict, typing.MutableMapping]) -> typing.List[dict]:
     """
     Query Cloudflare API and export the zones of the account
 
@@ -66,16 +64,17 @@ def cf_get_zones(
     :rtype: list
     """
     try:
-        cf = CloudFlare.CloudFlare(
-            token=credentials["CF"]["api_token"])  # Instantiate a CF class
-        cf_zone_list: typing.List[dict] = cf.zones.get()  # Get the zone list
-    except CloudFlare.CloudFlareAPIError:
-        raise LookupError("The provided API token is likely not valid")
-    return cf_zone_list  # Returns the zone list
+        # Instantiate a CF class
+        cf = CloudFlare.CloudFlare(token=credentials["CF"]["api_token"])
+        # Get the zone list
+        cf_zone_list: typing.List[dict] = cf.zones.get()
+    except CloudFlare.CloudFlareAPIError as e:
+        raise e
+    # Returns the zone list
+    return cf_zone_list
 
 
-def cf_parse_zones(
-        cf_zone_list: typing.List[dict]) -> typing.List[typing.Dict[str, str]]:
+def cf_parse_zones(cf_zone_list: typing.List[dict]) -> typing.List[typing.Dict[str, str]]:
     """
     Extract domains from the CF zone list
 
@@ -86,15 +85,14 @@ def cf_parse_zones(
     """
     cf_domains = []  # List of the domains of the account
     for index, zone in enumerate(cf_zone_list):
-        if zone['status'] != "active" or "#dns_records:edit" not in zone[
-                'permissions']:  # Check permission and status
+        # Check permission and status
+        if zone['status'] != "active" or "#dns_records:edit" not in zone['permissions']:
             continue
         cf_domains.append({'id': zone["id"], 'name': zone["name"]})
     return cf_domains
 
 
-def cf_check_sld(parsed_subdomains: typing.List[dict],
-                 cf_domains: typing.Dict[str, str]) -> typing.List[dict]:
+def cf_check_sld(parsed_subdomains: typing.List[dict], cf_domains: typing.Dict[str, str]) -> typing.List[dict]:
     """
     Check what domains are in the user's account
 
@@ -113,10 +111,9 @@ def cf_check_sld(parsed_subdomains: typing.List[dict],
     return parsed_subdomains
 
 
-def cf_check_existence(cf_domains: typing.List[dict],
-                       tfk_subdomains: typing.List[dict]):
+def cf_check_existence(cf_domains: typing.List[dict], tfk_subdomains: typing.List[dict]):
     """
-    Check if any subdomains are
+    Check if any subdomains are already in the zone
 
     :param cf_domains:
     :param tfk_subdomains:
@@ -124,8 +121,7 @@ def cf_check_existence(cf_domains: typing.List[dict],
     """
 
 
-def cf_check_tld_existence(cf_domains: typing.List[dict],
-                           tfk_subdomains: typing.List[dict]):
+def cf_check_tld_existence(cf_domains: typing.List[dict], tfk_subdomains: typing.List[dict]):
     for entry in tfk_subdomains:
         domain = entry['domain'] + '.' + entry['suffix']
         if domain not in cf_domains:
@@ -135,9 +131,7 @@ def cf_check_tld_existence(cf_domains: typing.List[dict],
 # TRAEFIK :
 
 
-def tfk_get_routers(
-    credentials: typing.Union[dict,
-                              typing.MutableMapping]) -> typing.List[dict]:
+def tfk_get_routers(credentials: typing.Union[dict, typing.MutableMapping]) -> typing.List[dict]:
     """
     Query Traefik API for the list of the HTTP Routers
 
@@ -147,21 +141,20 @@ def tfk_get_routers(
     """
     api_route: str = "/api/http/routers"  # API Route to dump router config
     url: str = credentials["API"]["url"].rstrip("/") + api_route  # Create URL
-    if not auth:  # If the endpoint is not under authentication
+    # If the endpoint is not under authentication
+    if not auth:
         with requests.get(url) as api_query:
             api_query.raise_for_status()
-            traefik_routers: typing.List[dict] = api_query.json(
-            )  # Get the list of HTTP Routers
+            # Get the list of HTTP Routers
+            traefik_routers: typing.List[dict] = api_query.json()
             return traefik_routers
-    else:  # If the endpoint is under authentication
-        with requests.get(
-                url,
-                auth=HTTPBasicAuth(username=credentials["API"]["user"],
-                                   password=credentials["API"]["pass"])
-        ) as api_query:  # Only HTTPBasicAuth is currently supported
+    else:
+        # Only HTTPBasicAuth is currently supported
+        with requests.get(url, auth=HTTPBasicAuth(username=credentials["API"]["user"],
+                                                  password=credentials["API"]["pass"])) as api_query:
             api_query.raise_for_status()
-            traefik_routers: typing.List[dict] = api_query.json(
-            )  # Get the list of HTTP Routers
+            # Get the list of HTTP Routers
+            traefik_routers: typing.List[dict] = api_query.json()
             return traefik_routers
 
 
@@ -173,20 +166,21 @@ def tfk_parse_routers(traefik_routers: typing.List[dict]):
     :type traefik_routers: list
     .. todo:: Take the state of the rule in mind
     """
-    basic_host_rules: list = []  # Basic Host(`example.com`) rule
-    # yapf: disable
-    logical_host_rules: list = []  # Logical ((Host(`example.com`) && Path(`/traefik`))) rules to unpack
-    # yapf: enable
+    # Basic Host(`example.com`) rule
+    basic_host_rules: list = []
+    # Logical ((Host(`example.com`) && Path(`/traefik`))) rules to unpack
+    logical_host_rules: list = []
     for router in traefik_routers:
-        if 'Host' in router['rule']:  # Checks if it's an Host rule
-            basic_host_rules.append(
-                router['rule'])  # Appends to the basic list
-            if '&&' in router['rule'] or '||' in router[
-                    'rule'] or "!" in router['rule']:  # If logical operator
-                logical_host_rules.append(
-                    router['rule'])  # Append to logical list
-                basic_host_rules.remove(
-                    router['rule'])  # Remove from basic list
+        # Checks if it's an Host rule
+        if 'Host' in router['rule']:
+            # Appends to the basic list
+            basic_host_rules.append(router['rule'])
+            # If logical operator
+            if '&&' in router['rule'] or '||' in router['rule'] or "!" in router['rule']:
+                # Append to logical list
+                logical_host_rules.append(router['rule'])
+                # Remove from basic list
+                basic_host_rules.remove(router['rule'])
     tfk_domains = tfk_parse_basic_rules(host_rules=basic_host_rules)
     if len(logical_host_rules) > 0:
         print("WARNING, LOGICAL RULES AREN'T IMPLEMENTED AND WILL BE IGNORED")
@@ -203,18 +197,16 @@ def tfk_parse_basic_rules(host_rules: typing.List[str]) -> typing.List[str]:
     :rtype: list
     """
     basic_domains = []
-    regex = re.compile(
-        r"[a-z\d\-.]*", re.IGNORECASE
-        | re.VERBOSE)  # Only those characters are allowed in domains
+    # Only those characters are allowed in domains
+    regex = re.compile(r"[a-z\d\-.]*", re.IGNORECASE | re.VERBOSE)
     for rule in host_rules:
-        basic_domains.append(
-            rule.split("`")[1])  # Extract the domain name from rule
+        # Extract the domain name from rule
+        basic_domains.append(rule.split("`")[1])
     for domain in basic_domains:
-        if not regex.fullmatch(domain) or (
-                not domain.startswith("-") or not domain.endswith("-")
-        ):  # Checks that the domain is syntaxily correct
-            basic_domains.remove(
-                domain)  # If not, remove the domain from the list
+        # Checks that the domain is syntaxily correct
+        if not regex.fullmatch(domain) or (not domain.startswith("-") or not domain.endswith("-")):
+            # If not, remove the domain from the list
+            basic_domains.remove(domain)
     return basic_domains
 
 
@@ -228,6 +220,6 @@ def utils_extract_subdomains(domains: typing.List[str]) -> typing.List[dict]:
     """
     subdomain_list: typing.List[dict] = []
     for domain in domains:
-        subdomain_list.append(domain_extractor.extract(
-            domain))  # Extract domain and sub from domain
+        # Extract domain and sub from domain
+        subdomain_list.append(domain_extractor.extract(domain))
     return subdomain_list
