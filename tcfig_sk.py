@@ -18,14 +18,27 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 import os
+import platform
 import re
 import typing
+from logging.handlers import SysLogHandler
 
 import CloudFlare
 import pydomainextractor
 import requests
 import toml
+from loguru import logger
 from requests.auth import HTTPBasicAuth
+
+dbg = True
+
+if platform.system() == "Windows":
+    logger.add("log_tcfig.log")
+elif not dbg:
+    syslog = SysLogHandler()
+    logger.add(syslog)
+else:
+    logger.add("dbg.log", backtrace=True, diagnose=True)
 
 domain_extractor = pydomainextractor.DomainExtractor()
 
@@ -35,7 +48,7 @@ config_file_name = "config.toml"
 auth = True
 
 
-def get_credentials() -> typing.Union[dict, typing.MutableMapping]:
+def get_credentials() -> typing.MutableMapping:
     """
     Get the credentials from the config file
 
@@ -45,17 +58,38 @@ def get_credentials() -> typing.Union[dict, typing.MutableMapping]:
     if os.path.isfile("config.toml"):  # Checks for config file existence
         # Load credentials dict
         credentials = toml.load(open(config_file_name, "rt"))
+        check_credentials(credentials)
+        # FIXME: We shouldn't need this
         global auth
         auth = credentials['API']['auth']
         return credentials
     else:
-        raise FileNotFoundError("Check that config file is correctly named")
+        logger.exception("Config File not found")
+        raise FileNotFoundError
+
+
+def check_credentials(credentials: typing.MutableMapping) -> None:
+    """
+    Check for credentials validity
+
+    :param credentials: Credentials extracted from the config file
+    :rtype: None
+    """
+    try:
+        if credentials['API']['auth']:
+            if credentials["API"]["user"] == "" or credentials["API"]["user"] is None:
+                logger.error("API endpoint username empty")
+            if credentials["API"]["pass"] == "" or credentials["API"]["pass"] is None:
+                logger.error("API endpoint password empty")
+    except KeyError:
+        logger.exception(
+            "Missing credentials or missing authentication declaration")
 
 
 # CF
 
-
-def cf_get_zones(credentials: typing.Union[dict, typing.MutableMapping]) -> typing.List[dict]:
+@logger.catch
+def cf_get_zones(credentials: typing.MutableMapping) -> typing.List[dict]:
     """
     Query Cloudflare API and export the zones of the account
 
@@ -69,8 +103,12 @@ def cf_get_zones(credentials: typing.Union[dict, typing.MutableMapping]) -> typi
         # Get the zone list
         cf_zone_list: typing.List[dict] = cf.zones.get()
     except CloudFlare.CloudFlareAPIError as e:
+        logger.exception("Cloudflare API Error, your token is likely invalid")
         raise e
     # Returns the zone list
+    if len(cf_zone_list) < 1:
+        logger.error("No zones on CF found")
+        exit(121)
     return cf_zone_list
 
 
@@ -86,9 +124,16 @@ def cf_parse_zones(cf_zone_list: typing.List[dict]) -> typing.List[typing.Dict[s
     cf_domains = []  # List of the domains of the account
     for index, zone in enumerate(cf_zone_list):
         # Check permission and status
-        if zone['status'] != "active" or "#dns_records:edit" not in zone['permissions']:
+        if zone['status'] != "active":
+            logger.warning(f" DNS zone for domain {zone['name']} isn't active")
+            continue
+        if "#dns_records:edit" not in zone['permissions']:
+            logger.warning(
+                f"DNS Record editing permissions lacking for zone {zone['name']}")
             continue
         cf_domains.append({'id': zone["id"], 'name': zone["name"]})
+    if len(cf_domains) < 1:
+        logger.error("No active domains found")
     return cf_domains
 
 
@@ -133,10 +178,9 @@ def cf_check_existence(cf_domains: typing.List[dict],
     """
     # Instantiate a CF class
     cf = CloudFlare.CloudFlare(token=credentials["CF"]["api_token"])
-    dns_records = []
     # Query a dump of the DNS zones
-    for zones in cf_domains:
-        dns_records.append(cf.zones.dns_records.get(zones["id"]))
+    dns_records = [cf.zones.dns_records.get(
+        zones["id"]) for zones in cf_domains]
     # Iterate over all the domains
     for entry in tfk_subdomains[:]:
         # Iterate over the dns_records list
@@ -156,7 +200,7 @@ def cf_check_existence(cf_domains: typing.List[dict],
 
 # TRAEFIK :
 
-
+@logger.catch
 def tfk_get_routers(credentials: typing.Union[dict, typing.MutableMapping]) -> typing.List[dict]:
     """
     Query Traefik API for the list of the HTTP Routers
@@ -206,9 +250,12 @@ def tfk_parse_routers(tfk_routers: typing.List[dict]):
             else:
                 # Append to the basic list
                 basic_host_rules.append(router['rule'])
+    if len(basic_host_rules) < 1:
+        logger.error("No basic rules found for Traefik, exiting")
+        exit(120)
     tfk_domains = tfk_parse_basic_rules(host_rules=basic_host_rules)
     if len(logical_host_rules) > 0:
-        print("WARNING, LOGICAL RULES AREN'T IMPLEMENTED AND WILL BE IGNORED")
+        logger.warning("Logical rules aren't implemented and will be ignored")
     return tfk_domains
 
 
@@ -250,7 +297,7 @@ def utils_extract_subdomains(domains: typing.List[str]) -> typing.List[dict]:
     return subdomain_list
 
 
-if __name__ == '__main__':
+def main():
     credentials = get_credentials()
     # CF
     cf_zone_list = cf_get_zones(credentials)
@@ -265,4 +312,9 @@ if __name__ == '__main__':
     tfk_subdomains_verified = cf_check_existence(
         cf_domains_verified, tfk_subdomains_verified, credentials)
     if len(tfk_subdomains_verified) < 1:
-        exit(128)
+        logger.info("Nothing to do, exitting")
+        exit(0)
+
+
+if __name__ == '__main__':
+    main()
