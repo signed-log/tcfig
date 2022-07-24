@@ -27,6 +27,7 @@ import CloudFlare
 import pydomainextractor
 import requests
 import toml
+import validators
 from loguru import logger
 from requests.auth import HTTPBasicAuth
 
@@ -47,7 +48,10 @@ config_file_name = "config.toml"
 # TODO: Implement cli args
 auth = True
 
+# FIXME: TLDS aren't recognized
 
+
+@logger.catch
 def get_credentials() -> typing.MutableMapping:
     """
     Get the credentials from the config file
@@ -59,9 +63,6 @@ def get_credentials() -> typing.MutableMapping:
         # Load credentials dict
         credentials = toml.load(open(config_file_name, "rt"))
         check_credentials(credentials)
-        # FIXME: We shouldn't need this
-        global auth
-        auth = credentials['API']['auth']
         return credentials
     else:
         logger.exception("Config File not found")
@@ -81,9 +82,10 @@ def check_credentials(credentials: typing.MutableMapping) -> None:
                 logger.error("API endpoint username empty")
             if credentials["API"]["pass"] == "" or credentials["API"]["pass"] is None:
                 logger.error("API endpoint password empty")
-    except KeyError:
+    except KeyError as e:
         logger.exception(
             "Missing credentials or missing authentication declaration")
+        raise e
 
 
 # CF
@@ -137,7 +139,8 @@ def cf_parse_zones(cf_zone_list: typing.List[dict]) -> typing.List[typing.Dict[s
     return cf_domains
 
 
-def cf_check_tld_existence(cf_domains: typing.List[dict], tfk_subdomains: typing.List[dict]) -> typing.Tuple[list[dict], list[dict]]:
+def cf_check_tld_existence(cf_domains: typing.List[dict], tfk_subdomains: typing.List[dict]) \
+        -> typing.Tuple[list[dict], list[dict]]:
     """
     Check if the TLDs in routers are actually on the CF's user zone
 
@@ -166,7 +169,7 @@ def cf_check_tld_existence(cf_domains: typing.List[dict], tfk_subdomains: typing
 
 def cf_check_existence(cf_domains: typing.List[dict],
                        tfk_subdomains: typing.List[dict],
-                       credentials: typing.Union[dict, typing.MutableMapping]):
+                       credentials: typing.Union[dict, typing.MutableMapping]) -> typing.List[dict]:
     """
     Check if any subdomains are already in the zone
 
@@ -177,7 +180,11 @@ def cf_check_existence(cf_domains: typing.List[dict],
     :return: Computed domains not in CF
     """
     # Instantiate a CF class
-    cf = CloudFlare.CloudFlare(token=credentials["CF"]["api_token"])
+    try:
+        cf = CloudFlare.CloudFlare(token=credentials["CF"]["api_token"])
+    except CloudFlare.CloudFlareAPIError as e:
+        logger.exception("Cloudflare API Error")
+        raise e
     # Query a dump of the DNS zones
     dns_records = [cf.zones.dns_records.get(
         zones["id"]) for zones in cf_domains]
@@ -212,7 +219,7 @@ def tfk_get_routers(credentials: typing.Union[dict, typing.MutableMapping]) -> t
     api_route: str = "/api/http/routers"  # API Route to dump router config
     url: str = credentials["API"]["url"].rstrip("/") + api_route  # Create URL
     # If the endpoint is not under authentication
-    if not auth:
+    if not credentials["API"]["auth"]:
         with requests.get(url) as api_query:
             api_query.raise_for_status()
             # Get the list of HTTP Routers
@@ -228,7 +235,7 @@ def tfk_get_routers(credentials: typing.Union[dict, typing.MutableMapping]) -> t
             return tfk_routers
 
 
-def tfk_parse_routers(tfk_routers: typing.List[dict]):
+def tfk_parse_routers(tfk_routers: typing.List[dict]) -> typing.List[str]:
     """
     Parse the Traefik HTTP routers list
 
@@ -295,6 +302,82 @@ def utils_extract_subdomains(domains: typing.List[str]) -> typing.List[dict]:
         # Extract domain and sub from domain
         subdomain_list.append(domain_extractor.extract(domain))
     return subdomain_list
+
+
+def add_record(tfk_subdomains: typing.List[dict],
+               cf_domains: typing.List[dict],
+               credentials: typing.MutableMapping):
+    """
+    Add the missing records
+
+    :param tfk_subdomains: List of all the subdomains to add
+    :param cf_domains: List of all zones of the account
+    :param credentials: List of the credentials
+    :return:
+    """
+    # Fetch IP Adresses
+    ipv4, ipv6 = ip(credentials)
+    # Records and zone info about the domains
+    records_to_add: typing.Dict[str, list] = {}
+    for zone in cf_domains:
+        for entry in tfk_subdomains:
+            if zone["name"] == f"{entry['domain']}.{entry['suffix']}":
+                if zone["name"] not in records_to_add.keys():
+                    records_to_add[zone["name"]] = [{"id": zone['id']}]
+                records_to_add[zone["name"]].append(
+                    f"{entry['subdomain']}.{entry['domain']}.{entry['suffix']}")
+    for domain in records_to_add:
+        dns_record: typing.List[dict] = []
+        for record in domain:
+            if isinstance(record, dict):
+                dns_record.append(record)
+            if not ipv6:
+                dns_record.append(
+                    {"name": record, "type": "A", "content": ipv4})
+            else:
+                dns_record.append(
+                    {"name": record, "type": "A", "content": ipv4})
+                dns_record.append(
+                    {"name": record, "type": "AAA", "content": ipv6})
+
+
+def cf_add_record(dns_record: typing.List[dict], credentials: typing.MutableMapping):
+    try:
+        _ = CloudFlare.CloudFlare(token=credentials["CF"]["api_token"])
+    except CloudFlare.CloudFlareAPIError as e:
+        logger.exception("Cloudflare API Error")
+        raise e
+
+
+def ip(credentials: typing.MutableMapping) -> typing.Tuple[str, str | bool]:
+    """
+    Grabs Public IP
+
+    :param credentials: List of credentials
+    .. todo:: Automatic IP fetching (will need to wait for CLI)
+    :return:
+    """
+    try:
+        if validators.ipv4(credentials["Records"]["IPv4"]):
+            ipv4 = credentials["Records"]["IPv4"]
+        else:
+            logger.error("Missing or invalid IPv4, aborting")
+            exit(139)
+    except KeyError as e:
+        logger.error("Missing configuration key for IPv4 aborting")
+        raise e
+    try:
+        if isinstance(credentials["Records"]["IPv6"], str) and validators.ipv6(credentials["Records"]["IPv6"]):
+            ipv6 = credentials["Records"]["IPv6"]
+        elif not credentials["Records"]["IPv6"]:
+            ipv6 = False
+        else:
+            logger.error("Missing or invalid IPv6, aborting")
+            exit(140)
+    except KeyError as e:
+        logger.error("Missing configuration key for IPv6, aborting")
+        raise e
+    return ipv4, ipv6
 
 
 def main():
