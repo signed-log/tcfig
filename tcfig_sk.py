@@ -32,19 +32,19 @@ from loguru import logger
 from requests.auth import HTTPBasicAuth
 
 # FIXME: Debug switch
-dbg = True
+g_dbg = True
 
 if platform.system() == "Windows":
     logger.add("log_tcfig.log")
-elif not dbg:
+elif not g_dbg:
     syslog = SysLogHandler()
     logger.add(syslog)
 else:
-    logger.add("dbg.log", backtrace=True, diagnose=True)
+    logger.add("g_dbg.log", backtrace=True, diagnose=True)
 
-domain_extractor = pydomainextractor.DomainExtractor()
+g_domain_extractor = pydomainextractor.DomainExtractor()
 
-config_file_name = "config.toml"
+g_config_file_name = "config.toml"
 
 # TODO: Implement cli args
 auth = True
@@ -60,7 +60,7 @@ def parse_config() -> MutableMapping:
     """
     if os.path.isfile("config.toml"):  # Checks for config file existence
         # Load credentials dict
-        config = toml.load(open(config_file_name, "rt"))
+        config = toml.load(open(g_config_file_name, "rt"))
         if check_credentials(config):
             return config
         else:
@@ -310,7 +310,7 @@ def split_subdomains(domains: list[str]) -> list[dict]:
     subdomain_list: list[dict] = []
     for domain in domains:
         # Extract domain and sub from domain
-        subdomain_list.append(domain_extractor.extract(domain))
+        subdomain_list.append(g_domain_extractor.extract(domain))
     return subdomain_list
 
 
