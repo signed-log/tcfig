@@ -23,6 +23,7 @@ import re
 from logging.handlers import SysLogHandler
 from typing import MutableMapping
 
+import click
 import CloudFlare
 import pydomainextractor
 import requests
@@ -31,36 +32,38 @@ import validators
 from loguru import logger
 from requests.auth import HTTPBasicAuth
 
-# FIXME: Debug switch
-g_dbg = True
+g_dev_debug = True  # Dev debug switch with Backtrace and diagnosis on
 
 if platform.system() == "Windows":
     logger.add("log_tcfig.log")
-elif not g_dbg:
+elif not g_dev_debug:
     syslog = SysLogHandler()
     logger.add(syslog)
-else:
+    if platform.system() == "Darwin":
+        # TODO: Add to docs
+        logger.warning(
+            "ASL (default SysLogHandler on MacOS), doesn't record INFO and DEBUG log priorities by default")
+elif g_dev_debug:
     logger.add("g_dbg.log", backtrace=True, diagnose=True)
 
 g_domain_extractor = pydomainextractor.DomainExtractor()
 
 g_config_file_name = "config.toml"
 
-# TODO: Implement cli args
-auth = True
+g_auth = True
 
 
 @logger.catch
-def parse_config() -> MutableMapping:
+def parse_config(filename=g_config_file_name) -> MutableMapping:
     """
     Get the credentials from the config file
 
     :return: Dict worth of credentials
     :rtype: Union[dict, MutableMapping]
     """
-    if os.path.isfile("config.toml"):  # Checks for config file existence
+    if os.path.isfile(filename):  # Checks for config file existence
         # Load credentials dict
-        config = toml.load(open(g_config_file_name, "rt"))
+        config = toml.load(open(filename, "rt"))
         if check_credentials(config):
             return config
         else:
@@ -142,6 +145,7 @@ def cf_parse_zones(cf_zone_list: list[dict]) -> list[dict]:
         cf_domains.append({'id': zone["id"], 'name': zone["name"]})
     if len(cf_domains) < 1:
         logger.error("No active domains found")
+        exit(122)
     return cf_domains
 
 
@@ -329,7 +333,7 @@ def gen_records(tfk_subdomains: list[dict],
     ipv4, ipv6 = ip(config)
     # Records and zone info about the domains
     zones_to_update: dict[dict] = {}
-    # TODO: Generate that list on the fly along other functions
+    # TODO: Generate that dict on the fly along other functions
     for zone in cf_domains:
         for entry in tfk_subdomains:
             # If the zone correspond to the domain
@@ -435,9 +439,63 @@ def ip(config: MutableMapping) -> tuple[str, str | bool]:
         raise
     return ipv4, ipv6
 
+# Validate
 
-def main():
-    config = parse_config()  # Parse config file
+
+def validate_config_file(ctx, param, value):
+    if value != g_config_file_name:
+        try:
+            _ = toml.loads(value)
+        except toml.decoder.TomlDecodeError as e:
+            logger.exception(f"Decoding error on config file : {e}")
+            raise click.BadParameter(f"Decoding error on config file : {e}")
+        else:
+            return value
+    else:
+        return value
+
+# CLI
+
+
+@click.group()
+@click.option('--debug/--no-debug', default=False, help="Enable debug mode")
+@click.option("-c",
+              "--config-file",
+              type=click.Path(exists=True),
+              callback=validate_config_file,
+              default=g_config_file_name,
+              required=False,
+              show_default=True,
+              help="Config file path")
+@click.pass_context
+def cli(ctx, debug, config_file):
+    ctx.ensure_object(dict)
+    ctx.obj["DEBUG"] = debug
+    ctx.obj["CONFIG"] = config_file
+
+
+@logger.catch
+@cli.command()
+@click.option("-p/-P",
+              "--post/--no-post",
+              default=True,
+              show_default=True,
+              help="Post the records to Cloudflare's API")
+@click.option("-e/-E",
+              "--check-exists/--no-exists-check",
+              default=True,
+              show_default=True,
+              help="Disable the checks against CF zones and force add records"
+              )
+@click.pass_context
+def run(ctx, post, check_exists):
+    ctx.obj["POST"] = post
+    ctx.obj["CHECK"] = check_exists
+    main(ctx)
+
+
+def main(ctx):
+    config = parse_config(ctx.obj["CONFIG"])  # Parse config file
     # CF
     # Get zones from the account and the parsed DNS ones
     cf_domains = cf_get_zones(config)
@@ -448,15 +506,22 @@ def main():
     # Checks
     cf_domains_verified, tfk_subdomains_verified = cf_check_tld_existence(
         cf_domains, tfk_subdomains)  # Checks what TLDs exist on the account
-    tfk_subdomains_verified = cf_check_existence(
-        cf_domains_verified, tfk_subdomains_verified, config)  # Check what subdomains are to be added
+    if ctx.obj["CHECK"]:
+        logger.info("Checking for record existence")
+        tfk_subdomains_verified = cf_check_existence(
+            cf_domains_verified, tfk_subdomains_verified, config)  # Check what subdomains are to be added
     if len(tfk_subdomains_verified) < 1:  # If nothing to do
-        logger.info("Nothing to do, exitting")
+        logger.info("Nothing to do, exiting")
         exit(0)
     records = gen_records(
         tfk_subdomains_verified, cf_domains_verified, config)  # Generate records
-    cf_add_record(records, config)  # Add records to Cloudflare
+    if ctx.obj["POST"]:
+        logger.info("Posting to Cloudflare")
+        cf_add_record(records, config)  # Add records to Cloudflare
+    else:
+        logger.info("CloudFlare post routine bypassed")
+        exit(0)
 
 
 if __name__ == '__main__':
-    main()
+    cli(obj={})
