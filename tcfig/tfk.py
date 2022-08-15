@@ -79,7 +79,8 @@ class TFK:
                 api_query.raise_for_status()
                 # Get the list of HTTP Routers
                 tfk_routers: typing.List[dict] = api_query.json()
-                tfk_domains: typing.List[str] = tfk_parse_routers(tfk_routers)
+                tfk_domains: typing.List[str] = self.tfk_parse_routers(
+                    tfk_routers)
                 return tfk_routers, tfk_domains
 
     def tfk_parse_routers(self, tfk_routers: typing.List[dict]) -> typing.List[str]:
