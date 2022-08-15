@@ -31,6 +31,7 @@ import validators
 from loguru import logger
 from requests.auth import HTTPBasicAuth
 
+# FIXME: Debug switch
 dbg = True
 
 if platform.system() == "Windows":
@@ -48,11 +49,12 @@ config_file_name = "config.toml"
 # TODO: Implement cli args
 auth = True
 
+
 # FIXME: TLDS aren't recognized
 
 
 @logger.catch
-def get_credentials() -> typing.MutableMapping:
+def parse_config() -> typing.MutableMapping:
     """
     Get the credentials from the config file
 
@@ -61,60 +63,61 @@ def get_credentials() -> typing.MutableMapping:
     """
     if os.path.isfile("config.toml"):  # Checks for config file existence
         # Load credentials dict
-        credentials = toml.load(open(config_file_name, "rt"))
-        check_credentials(credentials)
-        return credentials
+        config = toml.load(open(config_file_name, "rt"))
+        check_credentials(config)
+        return config
     else:
         logger.exception("Config File not found")
         raise FileNotFoundError
 
 
-def check_credentials(credentials: typing.MutableMapping) -> None:
+def check_credentials(config: typing.MutableMapping) -> None:
     """
     Check for credentials validity
 
-    :param credentials: Credentials extracted from the config file
+    :param config: Credentials extracted from the config file
     :rtype: None
     """
     try:
-        if credentials['API']['auth']:
-            if credentials["API"]["user"] == "" or credentials["API"]["user"] is None:
+        if config['API']['auth']:
+            if config["API"]["user"] == "" or config["API"]["user"] is None:
                 logger.error("API endpoint username empty")
-            if credentials["API"]["pass"] == "" or credentials["API"]["pass"] is None:
+            if config["API"]["pass"] == "" or config["API"]["pass"] is None:
                 logger.error("API endpoint password empty")
-    except KeyError as e:
+    except KeyError:
         logger.exception(
             "Missing credentials or missing authentication declaration")
-        raise e
+        raise
 
 
 # CF
 
 @logger.catch
-def cf_get_zones(credentials: typing.MutableMapping) -> typing.List[dict]:
+def cf_get_zones(config: typing.MutableMapping) -> typing.Tuple[typing.List[dict], typing.List[dict]]:
     """
     Query Cloudflare API and export the zones of the account
 
-    :param credentials: Credentials given by `get_credentials`
+    :param config: Credentials given by `get_credentials`
     :return: List of the zones
     :rtype: list
     """
     try:
         # Instantiate a CF class
-        cf = CloudFlare.CloudFlare(token=credentials["CF"]["api_token"])
+        cf_instance = CloudFlare.CloudFlare(token=config["CF"]["api_token"])
         # Get the zone list
-        cf_zone_list: typing.List[dict] = cf.zones.get()
-    except CloudFlare.CloudFlareAPIError as e:
+        cf_zone_list: typing.List[dict] = cf_instance.zones.get()
+    except CloudFlare.CloudFlareAPIError:
         logger.exception("Cloudflare API Error, your token is likely invalid")
-        raise e
+        raise
     # Returns the zone list
     if len(cf_zone_list) < 1:
         logger.error("No zones on CF found")
         exit(121)
-    return cf_zone_list
+    cf_domains: typing.List[dict] = cf_parse_zones(cf_zone_list)
+    return cf_zone_list, cf_domains
 
 
-def cf_parse_zones(cf_zone_list: typing.List[dict]) -> typing.List[typing.Dict[str, str]]:
+def cf_parse_zones(cf_zone_list: typing.List[dict]) -> typing.List[typing.Dict]:
     """
     Extract domains from the CF zone list
 
@@ -169,24 +172,24 @@ def cf_check_tld_existence(cf_domains: typing.List[dict], tfk_subdomains: typing
 
 def cf_check_existence(cf_domains: typing.List[dict],
                        tfk_subdomains: typing.List[dict],
-                       credentials: typing.Union[dict, typing.MutableMapping]) -> typing.List[dict]:
+                       config: typing.Union[dict, typing.MutableMapping]) -> typing.List[dict]:
     """
     Check if any subdomains are already in the zone
 
     :param cf_domains: List of domains in the CF's user zone along with the zone ID
     :type cf_domains: list[dict]
     :param tfk_subdomains:
-    :param credentials: Credentials file
+    :param config: Credentials file
     :return: Computed domains not in CF
     """
     # Instantiate a CF class
     try:
-        cf = CloudFlare.CloudFlare(token=credentials["CF"]["api_token"])
-    except CloudFlare.CloudFlareAPIError as e:
+        cf_instance = CloudFlare.CloudFlare(token=config["CF"]["api_token"])
+    except CloudFlare.CloudFlareAPIError:
         logger.exception("Cloudflare API Error")
-        raise e
+        raise
     # Query a dump of the DNS zones
-    dns_records = [cf.zones.dns_records.get(
+    dns_records = [cf_instance.zones.dns_records.get(
         zones["id"]) for zones in cf_domains]
     # Iterate over all the domains
     for entry in tfk_subdomains[:]:
@@ -208,31 +211,34 @@ def cf_check_existence(cf_domains: typing.List[dict],
 # TRAEFIK :
 
 @logger.catch
-def tfk_get_routers(credentials: typing.Union[dict, typing.MutableMapping]) -> typing.List[dict]:
+def tfk_get_routers(config: typing.Union[dict, typing.MutableMapping]) ->\
+        typing.Tuple[typing.List[dict], typing.List[str]]:
     """
     Query Traefik API for the list of the HTTP Routers
 
-    :param credentials: Credentials given by `get_credentials`
+    :param config: Credentials given by `get_credentials`
     :return: List of the HTTP Routers
     :rtype: list
     """
     api_route: str = "/api/http/routers"  # API Route to dump router config
-    url: str = credentials["API"]["url"].rstrip("/") + api_route  # Create URL
+    url: str = config["API"]["url"].rstrip("/") + api_route  # Create URL
     # If the endpoint is not under authentication
-    if not credentials["API"]["auth"]:
+    if not config["API"]["auth"]:
         with requests.get(url) as api_query:
             api_query.raise_for_status()
             # Get the list of HTTP Routers
             tfk_routers: typing.List[dict] = api_query.json()
-            return tfk_routers
+            tfk_domains: typing.List[str] = tfk_parse_routers(tfk_routers)
+            return tfk_routers, tfk_domains
     else:
         # Only HTTPBasicAuth is currently supported
-        with requests.get(url, auth=HTTPBasicAuth(username=credentials["API"]["user"],
-                                                  password=credentials["API"]["pass"])) as api_query:
+        with requests.get(url, auth=HTTPBasicAuth(username=config["API"]["user"],
+                                                  password=config["API"]["pass"])) as api_query:
             api_query.raise_for_status()
             # Get the list of HTTP Routers
             tfk_routers: typing.List[dict] = api_query.json()
-            return tfk_routers
+            tfk_domains: typing.List[str] = tfk_parse_routers(tfk_routers)
+            return tfk_routers, tfk_domains
 
 
 def tfk_parse_routers(tfk_routers: typing.List[dict]) -> typing.List[str]:
@@ -248,7 +254,7 @@ def tfk_parse_routers(tfk_routers: typing.List[dict]) -> typing.List[str]:
     # Logical ((Host(`example.com`) && Path(`/traefik`))) rules to unpack
     logical_host_rules: list = []
     for router in tfk_routers:
-        # Checks if it's an Host rule
+        # Checks if it's a Host rule
         if 'Host' in router['rule']:
             # If logical operator
             if '&&' in router['rule'] or '||' in router['rule'] or "!" in router['rule']:
@@ -304,96 +310,134 @@ def utils_extract_subdomains(domains: typing.List[str]) -> typing.List[dict]:
     return subdomain_list
 
 
-def add_record(tfk_subdomains: typing.List[dict],
+def record_gen(tfk_subdomains: typing.List[dict],
                cf_domains: typing.List[dict],
-               credentials: typing.MutableMapping):
+               config: typing.MutableMapping):
     """
-    Add the missing records
+    Generate the missing records for cf_add_record
 
     :param tfk_subdomains: List of all the subdomains to add
     :param cf_domains: List of all zones of the account
-    :param credentials: List of the credentials
+    :param config: List of the credentials
     :return:
     """
     # Fetch IP Adresses
-    ipv4, ipv6 = ip(credentials)
+    ipv4, ipv6 = ip(config)
     # Records and zone info about the domains
     records_to_add: typing.Dict[str, list] = {}
     for zone in cf_domains:
         for entry in tfk_subdomains:
+            # If the zone correspond to the domain
             if zone["name"] == f"{entry['domain']}.{entry['suffix']}":
-                if zone["name"] not in records_to_add.keys():
+                if zone["name"] not in records_to_add.keys():  # Checks for the header
+                    # Add the zone ID as a header to the dict list
                     records_to_add[zone["name"]] = [{"id": zone['id']}]
                 records_to_add[zone["name"]].append(
                     f"{entry['subdomain']}.{entry['domain']}.{entry['suffix']}")
     for domain in records_to_add:
         dns_record: typing.List[dict] = []
         for record in domain:
-            if isinstance(record, dict):
-                dns_record.append(record)
-            if not ipv6:
+            if isinstance(record, dict):  # Checks if header
+                dns_record.append(record)  # Appends the raw header
+            if not ipv6:  # Only append A records if ipv6 is disabled
                 dns_record.append(
-                    {"name": record, "type": "A", "content": ipv4})
-            else:
+                    {
+                        "name": record,
+                        "type": "A",
+                        "content": ipv4,
+                        'ttl': int(config["CF"]["TTL"]),
+                        'proxied': bool(config["CF"]["proxied"])
+                    }
+                )
+            else:  # Append both A and AAA records
                 dns_record.append(
-                    {"name": record, "type": "A", "content": ipv4})
+                    {
+                        "name": record,
+                        "type": "A",
+                        "content": ipv4,
+                        'ttl': int(config["CF"]["TTL"]),
+                        'proxied': bool(config["CF"]["proxied"])
+                    }
+                )
                 dns_record.append(
-                    {"name": record, "type": "AAA", "content": ipv6})
+                    {
+                        "name": record,
+                        "type": "AAA",
+                        "content": ipv6,
+                        'ttl': int(config["CF"]["TTL"]),
+                        'proxied': bool(config["CF"]["proxied"])
+                    }
+                )
 
 
-def cf_add_record(dns_record: typing.List[dict], credentials: typing.MutableMapping):
+@logger.catch
+def cf_add_record(dns_records: typing.List[dict],
+                  config: typing.MutableMapping,
+                  ipv6: typing.Union[str, bool]):
+    """
+    Add records to CF
+    :param dns_records: List of dns records to add
+    :param config: List of credentials and options
+    :param ipv6: Set IPv6 or disable switch
+    :return:
+    """
     try:
-        _ = CloudFlare.CloudFlare(token=credentials["CF"]["api_token"])
-    except CloudFlare.CloudFlareAPIError as e:
+        cf_instance = CloudFlare.CloudFlare(token=config["CF"]["api_token"])
+    except CloudFlare.CloudFlareAPIError:
         logger.exception("Cloudflare API Error")
-        raise e
+        raise
+    for record in dns_records:
+        zone_id = record[0] if isinstance(record[0], dict) else None
+        record_data = record[1] if not ipv6 else (record[1], record[2])
+        for data in record_data:
+            cf_instance.zones.dns_records.post(zone_id, data=data)
 
 
-def ip(credentials: typing.MutableMapping) -> typing.Tuple[str, str | bool]:
+def ip(config: typing.MutableMapping) -> typing.Tuple[str, str | bool]:
     """
     Grabs Public IP
 
-    :param credentials: List of credentials
+    :param config: List of credentials
     .. todo:: Automatic IP fetching (will need to wait for CLI)
     :return:
     """
     try:
-        if validators.ipv4(credentials["Records"]["IPv4"]):
-            ipv4 = credentials["Records"]["IPv4"]
+        if validators.ipv4(config["Records"]["IPv4"]):
+            ipv4 = config["Records"]["IPv4"]
         else:
             logger.error("Missing or invalid IPv4, aborting")
             exit(139)
-    except KeyError as e:
+    except KeyError:
         logger.error("Missing configuration key for IPv4 aborting")
-        raise e
+        raise
     try:
-        if isinstance(credentials["Records"]["IPv6"], str) and validators.ipv6(credentials["Records"]["IPv6"]):
-            ipv6 = credentials["Records"]["IPv6"]
-        elif not credentials["Records"]["IPv6"]:
+        if isinstance(config["Records"]["IPv6"], str) and validators.ipv6(config["Records"]["IPv6"]):
+            ipv6 = config["Records"]["IPv6"]
+        elif not config["Records"]["IPv6"]:
             ipv6 = False
         else:
             logger.error("Missing or invalid IPv6, aborting")
             exit(140)
-    except KeyError as e:
+    except KeyError:
         logger.error("Missing configuration key for IPv6, aborting")
-        raise e
+        raise
     return ipv4, ipv6
 
 
 def main():
-    credentials = get_credentials()
+    config = parse_config()  # Parse config file
     # CF
-    cf_zone_list = cf_get_zones(credentials)
-    cf_domains = cf_parse_zones(cf_zone_list)
+    # Get zones from the account and the parsed DNS ones
+    cf_zone_list, cf_domains = cf_get_zones(config)
     # TFK
-    tfk_routers = tfk_get_routers(credentials)
-    tfk_domains = tfk_parse_routers(tfk_routers)
+    tfk_routers, tfk_domains = tfk_get_routers(
+        config)  # Get routers from the Traefik install
     tfk_subdomains = utils_extract_subdomains(tfk_domains)
     # Checks
     cf_domains_verified, tfk_subdomains_verified = cf_check_tld_existence(
-        cf_domains, tfk_subdomains)
+        cf_domains, tfk_subdomains)  # Checks what TLDs exist on the account
     tfk_subdomains_verified = cf_check_existence(
-        cf_domains_verified, tfk_subdomains_verified, credentials)
+        cf_domains_verified, tfk_subdomains_verified, config)  # Check what subdomains are to be added
     if len(tfk_subdomains_verified) < 1:
         logger.info("Nothing to do, exitting")
         exit(0)

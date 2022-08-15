@@ -16,6 +16,7 @@ click = "*"
 pre-commit = "*"
 autopep8 = "*"
 "pylama[all]" = "*"
+coverage = "*"
 
 [requires]
 python_version = "3"
