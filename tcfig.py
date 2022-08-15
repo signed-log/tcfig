@@ -1,8 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
+import os
+import platform
+import re
+from logging.handlers import SysLogHandler
+from sys import exit
+from typing import MutableMapping
+
+import click
+import CloudFlare
+import pydomainextractor
+import requests
+import toml
+import validators
+from loguru import logger
+from requests.auth import HTTPBasicAuth
+
+legal = """
     Link Traefik to Cloudflare DNS
-    Copyright (C) 2O22  Nicolas signed-log FORMICHELLA
+    Copyright (C) 2O22 The tcfig authors
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -16,21 +32,7 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""
-import os
-import platform
-import re
-from logging.handlers import SysLogHandler
-from typing import MutableMapping
-
-import click
-import CloudFlare
-import pydomainextractor
-import requests
-import toml
-import validators
-from loguru import logger
-from requests.auth import HTTPBasicAuth
+    """
 
 g_dev_debug = True  # Dev debug switch with Backtrace and diagnosis on
 
@@ -467,8 +469,12 @@ def validate_config_file(ctx, param, value):
               required=False,
               show_default=True,
               help="Config file path")
+@click.option("-l", "--license", "legal_print", is_flag=True, default=False, help="Print License")
 @click.pass_context
-def cli(ctx, debug, config_file):
+def cli(ctx, debug, config_file, legal_print):
+    if legal_print:
+        click.echo(legal)
+        exit(0)
     ctx.ensure_object(dict)
     ctx.obj["DEBUG"] = debug
     ctx.obj["CONFIG"] = config_file
@@ -494,8 +500,11 @@ def run(ctx, post, check_exists):
     main(ctx)
 
 
-def main(ctx):
-    config = parse_config(ctx.obj["CONFIG"])  # Parse config file
+def main(ctx=None, c_config_file=g_config_file_name, c_check=True, c_post=False):
+    if ctx is not None:
+        config = parse_config(ctx.obj["CONFIG"])  # Parse config file
+    else:  # If CLI is not ran, context will not be available
+        config = parse_config(c_config_file)
     # CF
     # Get zones from the account and the parsed DNS ones
     cf_domains = cf_get_zones(config)
@@ -506,7 +515,7 @@ def main(ctx):
     # Checks
     cf_domains_verified, tfk_subdomains_verified = cf_check_tld_existence(
         cf_domains, tfk_subdomains)  # Checks what TLDs exist on the account
-    if ctx.obj["CHECK"]:
+    if (ctx is not None and ctx.obj["CHECK"]) or (ctx is None and c_check):
         logger.info("Checking for record existence")
         tfk_subdomains_verified = cf_check_existence(
             cf_domains_verified, tfk_subdomains_verified, config)  # Check what subdomains are to be added
@@ -515,7 +524,7 @@ def main(ctx):
         exit(0)
     records = gen_records(
         tfk_subdomains_verified, cf_domains_verified, config)  # Generate records
-    if ctx.obj["POST"]:
+    if (ctx is not None and ctx.obj["POST"]) or (ctx is None and c_post):
         logger.info("Posting to Cloudflare")
         cf_add_record(records, config)  # Add records to Cloudflare
     else:
