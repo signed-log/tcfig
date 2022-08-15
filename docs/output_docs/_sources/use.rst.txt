@@ -1,0 +1,6 @@
+Installation and use
+====================
+
+To use *tcfig*, you need to install *pipenv* so that it can manage the dependencies
+
+To do so, you can follow any of the :doc:`pipenv:install` in Pipenv documentation

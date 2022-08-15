@@ -17,6 +17,9 @@ pre-commit = "*"
 autopep8 = "*"
 "pylama[all]" = "*"
 coverage = "*"
+sphinx = "5.1.1"
+sphinxcontrib-osexample = "*"
+sphinx-rtd-theme = ">0.3.0"
 
 [requires]
 python_version = "3"

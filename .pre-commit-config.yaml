@@ -28,6 +28,8 @@ repos:
       - id: python-use-type-annotations
       - id: python-check-blanket-noqa
       - id: python-check-blanket-type-ignore
+      - id: rst-directive-colons
+      - id: rst-inline-touching-normal
   - repo: https://github.com/asottile/reorder_python_imports
     rev: v3.8.2
     hooks:
@@ -42,3 +44,4 @@ repos:
     rev: 3.0.0
     hooks:
       - id: forbid-binary
+        exclude: docs/*

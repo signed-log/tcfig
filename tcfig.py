@@ -36,6 +36,8 @@ legal = """
 
 g_dev_debug = True  # Dev debug switch with Backtrace and diagnosis on
 
+# Logging setup
+
 if platform.system() == "Windows":
     logger.add("log_tcfig.log")
 elif not g_dev_debug:
@@ -58,10 +60,12 @@ g_auth = True
 @logger.catch
 def parse_config(filename=g_config_file_name) -> MutableMapping:
     """
-    Get the credentials from the config file
+    Parse the TOML config file
 
+    :param filename: Set a custom config file, defaults to ./config.toml
+    :type filename: str, optional
     :return: Dict worth of credentials
-    :rtype: Union[dict, MutableMapping]
+    :rtype: MutableMapping
     """
     if os.path.isfile(filename):  # Checks for config file existence
         # Load credentials dict
@@ -80,7 +84,9 @@ def check_credentials(config: MutableMapping) -> bool:
     Check for credentials validity
 
     :param config: Credentials extracted from the config file
-    :rtype: None
+    :type config: MutableMapping
+    :return: Validity of the credentials provided
+    :rtype: bool
     """
     try:
         if config['API']['auth']:
@@ -105,9 +111,9 @@ def cf_get_zones(config: MutableMapping) -> list[dict]:
     """
     Query Cloudflare API and export the zones of the account
 
-    :param config: Credentials given by `get_credentials`
-    :return: List of the zones
-    :rtype: list
+    :param config: Parsed config file
+    :return: Parsed domain lists
+    :rtype: list[dict]
     """
     try:
         # Instantiate a CF class
@@ -132,7 +138,7 @@ def cf_parse_zones(cf_zone_list: list[dict]) -> list[dict]:
     :param cf_zone_list: List of the zones
     :type cf_zone_list: list
     :return: List of valid (active and with enough permssions) CF domains
-    :rtype: list[str]
+    :rtype: list[dict]
     """
     cf_domains = []  # List of the domains of the account
     for index, zone in enumerate(cf_zone_list):
@@ -160,7 +166,7 @@ def cf_check_tld_existence(cf_domains: list[dict], tfk_subdomains: list[dict]) \
     :type cf_domains: list[dict]
     :param tfk_subdomains: List of computed (split between TLD, SLD, 3LD...)
     :return: Checked TLD list against CF and TFK
-    :rtype: list[dict]
+    :rtype: tuple(list[dict], list[dict])
     """
     cf_domains_verified = []
     tfk_subdomains_verified = []
@@ -187,8 +193,10 @@ def cf_check_existence(cf_domains: list[dict],
 
     :param cf_domains: List of domains in the CF's user zone along with the zone ID
     :type cf_domains: list[dict]
-    :param tfk_subdomains:
-    :param config: Credentials file
+    :param tfk_subdomains: List of Traefik subdomains
+    :type tfk_subdomains: list[dict]
+    :param config: Parsed config file
+    :type config: MutableMapping
     :return: Computed domains not in CF
     """
     # Instantiate a CF class
@@ -225,7 +233,7 @@ def tfk_get_routers(config: MutableMapping) -> list[str]:
     """
     Query Traefik API for the list of the HTTP Routers
 
-    :param config: Credentials given by `get_credentials`
+    :param config: Parsed config file
     :return: List of the HTTP Routers
     :rtype: list
     """
@@ -256,7 +264,6 @@ def tfk_parse_routers(tfk_routers: list[dict]) -> list[str]:
 
     :param tfk_routers: Raw list of HTTP routers
     :type tfk_routers: list
-    .. todo:: Take the state of the rule in mind
     """
     # Basic Host(`example.com`) rule
     basic_host_rules: list = []
@@ -283,20 +290,20 @@ def tfk_parse_routers(tfk_routers: list[dict]) -> list[str]:
 
 def tfk_parse_basic_rules(host_rules: list[str]) -> list[str]:
     """
-    Extract, and syntaxically the domain from the basic rule list
+    Extract, and syntaxically check the domain from the basic rule list
 
     :param host_rules: List of host rules
-    :type host_rules: list
+    :type host_rules: list[str]
     :return: List of domains extracted
-    :rtype: list
+    :rtype: list[str]
     """
     basic_domains: list[str] = []
-    # Only those characters are allowed in domains
+    # Only those characters are allowed in domains, and domains can't start or end by either a "." or a "-"
     regex = re.compile(r"[a-z\d][a-z\d\-.]*[a-z\d]",
                        re.IGNORECASE | re.VERBOSE)
     for rule in host_rules:
         # Extract the domain name from rule
-        basic_domains.append(rule.split("`")[1])
+        basic_domains.append(rule.split("`")[1].lower())
     for domain in basic_domains:
         # Checks that the domain is syntaxily correct
         if not regex.fullmatch(domain):
@@ -310,6 +317,7 @@ def split_subdomains(domains: list[str]) -> list[dict]:
     Extract the domain and subdomain from the domain
 
     :param domains: List of extracted domains from Traefik
+    :type domains: list[str]
     :return: List of parsed subdomains
     :rtype: list[dict]
     """
@@ -327,9 +335,13 @@ def gen_records(tfk_subdomains: list[dict],
     Generate the missing records for cf_add_record
 
     :param tfk_subdomains: List of all the subdomains to add
+    :type tfk_subdomains: list[dict]
     :param cf_domains: List of all zones of the account
-    :param config: List of the credentials
-    :return:
+    :type cf_domains: list[dict]
+    :param config: Parsed config file
+    :type config: MutableMapping
+    :return: Dictionnary comprising the crafted records
+    :rtype: dict
     """
     # Fetch IP Adresses
     ipv4, ipv6 = ip(config)
@@ -384,12 +396,15 @@ def gen_records(tfk_subdomains: list[dict],
 
 @logger.catch
 def cf_add_record(zones_to_update: dict[dict],
-                  config: MutableMapping):
+                  config: MutableMapping) -> None:
     """
-    Add records to CF
-    :param zones_to_update: List of dns records to add
-    :param config: List of credentials and options
-    :return:
+    Posts records to CF
+
+    :param zones_to_update: dict of dns records to add
+    :type zones_to_update: dict[dict]
+    :param config: Parsed config file
+    :type config: MutableMapping
+    :return: Nothing
     """
     try:
         cf_instance = CloudFlare.CloudFlare(token=config["CF"]["api_token"])
@@ -411,11 +426,11 @@ def cf_add_record(zones_to_update: dict[dict],
 
 def ip(config: MutableMapping) -> tuple[str, str | bool]:
     """
-    Grabs Public IP
+    Grabs Public IP from the config file
 
     :param config: List of credentials
-    .. todo:: Automatic IP fetching (will need to wait for CLI)
-    :return:
+    :return: ipv4 and ipv6 (address or disable switch)
+    :rtype: tuple[str, str | bool]
     """
     ipv4: str = ""
     ipv6: str | bool = ""
@@ -445,6 +460,17 @@ def ip(config: MutableMapping) -> tuple[str, str | bool]:
 
 
 def validate_config_file(ctx, param, value):
+    """
+    Asserts syntaxic validity of the config file when provided through the CLI
+
+    Validity for file provided through config file is determined at parsing
+
+    :param ctx: Click contect
+    :param param: Click parameter
+    :param value: Click parameter value
+    :return: The given value if it is valid
+    :raise click.BadParameter: If the config file fails to load
+    """
     if value != g_config_file_name:
         try:
             _ = toml.loads(value)
@@ -472,6 +498,16 @@ def validate_config_file(ctx, param, value):
 @click.option("-l", "--license", "legal_print", is_flag=True, default=False, help="Print License")
 @click.pass_context
 def cli(ctx, debug, config_file, legal_print):
+    """
+    Main CLI handler
+
+    :param ctx: Click context
+    :param debug: Enable regular debug mode
+    :param config_file: Set a custom file path for the config file
+    :param legal_print: Print license
+    :type legal_print: bool
+    :return:
+    """
     if legal_print:
         click.echo(legal)
         exit(0)
@@ -495,12 +531,37 @@ def cli(ctx, debug, config_file, legal_print):
               )
 @click.pass_context
 def run(ctx, post, check_exists):
+    """
+    CLI handler for the run command
+
+    :param ctx: Click context
+    :param post: Bypass of the post routines
+    :type post: bool
+    :param check_exists: Bypass of the existence checks
+    :type check_exists: bool
+    :return: Nothing
+    """
     ctx.obj["POST"] = post
     ctx.obj["CHECK"] = check_exists
     main(ctx)
 
 
 def main(ctx=None, c_config_file=g_config_file_name, c_check=True, c_post=False):
+    """
+    Main function that controls the running of the program
+
+    :param ctx: Click context
+    :param c_config_file: Function parameter for the config file path.
+        This is not used if the context is provided (when the CLI is not used, for exemple in a python console)
+    :type c_config_file: bool, optional
+    :param c_check: Function parameter for the existence check
+        This is not used if the context is provided (when the CLI is not used, for exemple in a python console)
+    :type c_check: bool, optional
+    :param c_post: Function parameter for the CloudFlare's post
+        This is not used if the context is provided (when the CLI is not used, for exemple in a python console)
+    :type c_post: bool, optional
+    :return: Nothing
+    """
     if ctx is not None:
         config = parse_config(ctx.obj["CONFIG"])  # Parse config file
     else:  # If CLI is not ran, context will not be available
