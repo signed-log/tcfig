@@ -20,8 +20,8 @@
 import os
 import platform
 import re
-import typing
 from logging.handlers import SysLogHandler
+from typing import MutableMapping
 
 import CloudFlare
 import pydomainextractor
@@ -54,7 +54,7 @@ auth = True
 
 
 @logger.catch
-def parse_config() -> typing.MutableMapping:
+def parse_config() -> MutableMapping:
     """
     Get the credentials from the config file
 
@@ -64,14 +64,16 @@ def parse_config() -> typing.MutableMapping:
     if os.path.isfile("config.toml"):  # Checks for config file existence
         # Load credentials dict
         config = toml.load(open(config_file_name, "rt"))
-        check_credentials(config)
-        return config
+        if check_credentials(config):
+            return config
+        else:
+            logger.exception("Credentials are invalid")
     else:
         logger.exception("Config File not found")
         raise FileNotFoundError
 
 
-def check_credentials(config: typing.MutableMapping) -> None:
+def check_credentials(config: MutableMapping) -> bool:
     """
     Check for credentials validity
 
@@ -82,18 +84,22 @@ def check_credentials(config: typing.MutableMapping) -> None:
         if config['API']['auth']:
             if config["API"]["user"] == "" or config["API"]["user"] is None:
                 logger.error("API endpoint username empty")
+                return False
             if config["API"]["pass"] == "" or config["API"]["pass"] is None:
                 logger.error("API endpoint password empty")
+                return False
     except KeyError:
         logger.exception(
             "Missing credentials or missing authentication declaration")
         raise
+    else:
+        return True
 
 
 # CF
 
 @logger.catch
-def cf_get_zones(config: typing.MutableMapping) -> typing.Tuple[typing.List[dict], typing.List[dict]]:
+def cf_get_zones(config: MutableMapping) -> list[dict]:
     """
     Query Cloudflare API and export the zones of the account
 
@@ -105,19 +111,19 @@ def cf_get_zones(config: typing.MutableMapping) -> typing.Tuple[typing.List[dict
         # Instantiate a CF class
         cf_instance = CloudFlare.CloudFlare(token=config["CF"]["api_token"])
         # Get the zone list
-        cf_zone_list: typing.List[dict] = cf_instance.zones.get()
-    except CloudFlare.CloudFlareAPIError:
+        cf_zone_list: list[dict] = cf_instance.zones.get()
+    except CloudFlare.exceptions.CloudFlareAPIError:
         logger.exception("Cloudflare API Error, your token is likely invalid")
         raise
     # Returns the zone list
     if len(cf_zone_list) < 1:
         logger.error("No zones on CF found")
         exit(121)
-    cf_domains: typing.List[dict] = cf_parse_zones(cf_zone_list)
-    return cf_zone_list, cf_domains
+    cf_domains: list[dict] = cf_parse_zones(cf_zone_list)
+    return cf_domains
 
 
-def cf_parse_zones(cf_zone_list: typing.List[dict]) -> typing.List[typing.Dict]:
+def cf_parse_zones(cf_zone_list: list[dict]) -> list[dict]:
     """
     Extract domains from the CF zone list
 
@@ -142,8 +148,8 @@ def cf_parse_zones(cf_zone_list: typing.List[dict]) -> typing.List[typing.Dict]:
     return cf_domains
 
 
-def cf_check_tld_existence(cf_domains: typing.List[dict], tfk_subdomains: typing.List[dict]) \
-        -> typing.Tuple[list[dict], list[dict]]:
+def cf_check_tld_existence(cf_domains: list[dict], tfk_subdomains: list[dict]) \
+        -> tuple[list[dict], list[dict]]:
     """
     Check if the TLDs in routers are actually on the CF's user zone
 
@@ -170,9 +176,9 @@ def cf_check_tld_existence(cf_domains: typing.List[dict], tfk_subdomains: typing
     return cf_domains_verified, tfk_subdomains_verified
 
 
-def cf_check_existence(cf_domains: typing.List[dict],
-                       tfk_subdomains: typing.List[dict],
-                       config: typing.Union[dict, typing.MutableMapping]) -> typing.List[dict]:
+def cf_check_existence(cf_domains: list[dict],
+                       tfk_subdomains: list[dict],
+                       config: MutableMapping) -> list[dict]:
     """
     Check if any subdomains are already in the zone
 
@@ -185,7 +191,7 @@ def cf_check_existence(cf_domains: typing.List[dict],
     # Instantiate a CF class
     try:
         cf_instance = CloudFlare.CloudFlare(token=config["CF"]["api_token"])
-    except CloudFlare.CloudFlareAPIError:
+    except CloudFlare.exceptions.CloudFlareAPIError:
         logger.exception("Cloudflare API Error")
         raise
     # Query a dump of the DNS zones
@@ -195,7 +201,8 @@ def cf_check_existence(cf_domains: typing.List[dict],
     for entry in tfk_subdomains[:]:
         # Iterate over the dns_records list
         # Recreate the TLD
-        domain = f"{entry['subdomain']}.{entry['domain']}.{entry['suffix']}"
+        domain = f"{entry['subdomain']}.{entry['domain']}.{entry['suffix']}" if entry["subdomain"].isalnum() \
+            else f"{entry['domain']}.{entry['suffix']}"  # Support bare TLD
         for zone in dns_records:
             for record in zone:
                 # If already exists
@@ -211,8 +218,7 @@ def cf_check_existence(cf_domains: typing.List[dict],
 # TRAEFIK :
 
 @logger.catch
-def tfk_get_routers(config: typing.Union[dict, typing.MutableMapping]) ->\
-        typing.Tuple[typing.List[dict], typing.List[str]]:
+def tfk_get_routers(config: MutableMapping) -> list[str]:
     """
     Query Traefik API for the list of the HTTP Routers
 
@@ -227,21 +233,21 @@ def tfk_get_routers(config: typing.Union[dict, typing.MutableMapping]) ->\
         with requests.get(url) as api_query:
             api_query.raise_for_status()
             # Get the list of HTTP Routers
-            tfk_routers: typing.List[dict] = api_query.json()
-            tfk_domains: typing.List[str] = tfk_parse_routers(tfk_routers)
-            return tfk_routers, tfk_domains
+            tfk_routers: list[dict] = api_query.json()
+            tfk_domains: list[str] = tfk_parse_routers(tfk_routers)
+            return tfk_domains
     else:
         # Only HTTPBasicAuth is currently supported
         with requests.get(url, auth=HTTPBasicAuth(username=config["API"]["user"],
                                                   password=config["API"]["pass"])) as api_query:
             api_query.raise_for_status()
             # Get the list of HTTP Routers
-            tfk_routers: typing.List[dict] = api_query.json()
-            tfk_domains: typing.List[str] = tfk_parse_routers(tfk_routers)
-            return tfk_routers, tfk_domains
+            tfk_routers: list[dict] = api_query.json()
+            tfk_domains: list[str] = tfk_parse_routers(tfk_routers)
+            return tfk_domains
 
 
-def tfk_parse_routers(tfk_routers: typing.List[dict]) -> typing.List[str]:
+def tfk_parse_routers(tfk_routers: list[dict]) -> list[str]:
     """
     Parse the Traefik HTTP routers list
 
@@ -272,7 +278,7 @@ def tfk_parse_routers(tfk_routers: typing.List[dict]) -> typing.List[str]:
     return tfk_domains
 
 
-def tfk_parse_basic_rules(host_rules: typing.List[str]) -> typing.List[str]:
+def tfk_parse_basic_rules(host_rules: list[str]) -> list[str]:
     """
     Extract, and syntaxically the domain from the basic rule list
 
@@ -281,21 +287,22 @@ def tfk_parse_basic_rules(host_rules: typing.List[str]) -> typing.List[str]:
     :return: List of domains extracted
     :rtype: list
     """
-    basic_domains: typing.List[str] = []
+    basic_domains: list[str] = []
     # Only those characters are allowed in domains
-    regex = re.compile(r"[a-z\d\-.]*", re.IGNORECASE | re.VERBOSE)
+    regex = re.compile(r"[a-z\d][a-z\d\-.]*[a-z\d]",
+                       re.IGNORECASE | re.VERBOSE)
     for rule in host_rules:
         # Extract the domain name from rule
         basic_domains.append(rule.split("`")[1])
     for domain in basic_domains:
         # Checks that the domain is syntaxily correct
-        if not regex.fullmatch(domain) or (not domain.startswith("-") or not domain.endswith("-")):
+        if not regex.fullmatch(domain):
             # If not, remove the domain from the list
             basic_domains.remove(domain)
     return basic_domains
 
 
-def utils_extract_subdomains(domains: typing.List[str]) -> typing.List[dict]:
+def split_subdomains(domains: list[str]) -> list[dict]:
     """
     Extract the domain and subdomain from the domain
 
@@ -303,16 +310,16 @@ def utils_extract_subdomains(domains: typing.List[str]) -> typing.List[dict]:
     :return: List of parsed subdomains
     :rtype: list[dict]
     """
-    subdomain_list: typing.List[dict] = []
+    subdomain_list: list[dict] = []
     for domain in domains:
         # Extract domain and sub from domain
         subdomain_list.append(domain_extractor.extract(domain))
     return subdomain_list
 
 
-def record_gen(tfk_subdomains: typing.List[dict],
-               cf_domains: typing.List[dict],
-               config: typing.MutableMapping):
+def gen_records(tfk_subdomains: list[dict],
+                cf_domains: list[dict],
+                config: MutableMapping) -> dict:
     """
     Generate the missing records for cf_add_record
 
@@ -324,25 +331,26 @@ def record_gen(tfk_subdomains: typing.List[dict],
     # Fetch IP Adresses
     ipv4, ipv6 = ip(config)
     # Records and zone info about the domains
-    records_to_add: typing.Dict[str, list] = {}
+    zones_to_update: dict[dict] = {}
+    # TODO: Generate that list on the fly along other functions
     for zone in cf_domains:
         for entry in tfk_subdomains:
             # If the zone correspond to the domain
             if zone["name"] == f"{entry['domain']}.{entry['suffix']}":
-                if zone["name"] not in records_to_add.keys():  # Checks for the header
+                if zone["name"] not in zones_to_update.keys():  # Checks for the header
                     # Add the zone ID as a header to the dict list
-                    records_to_add[zone["name"]] = [{"id": zone['id']}]
-                records_to_add[zone["name"]].append(
-                    f"{entry['subdomain']}.{entry['domain']}.{entry['suffix']}")
-    for domain in records_to_add:
-        dns_record: typing.List[dict] = []
-        for record in domain:
-            if isinstance(record, dict):  # Checks if header
-                dns_record.append(record)  # Appends the raw header
+                    zones_to_update[zone["name"]] = {
+                        'id': zone['id'], 'domains': [], 'records': []}
+                zones_to_update[zone["name"]]["domains"].append(
+                    f"{entry['subdomain']}.{entry['domain']}.{entry['suffix']}" if entry["subdomain"].isalnum()
+                    else f"{entry['domain']}.{entry['suffix']}"
+                )
+    for zone in zones_to_update.keys():
+        for domain in zones_to_update[zone]['domains']:
             if not ipv6:  # Only append A records if ipv6 is disabled
-                dns_record.append(
+                zones_to_update[zone]['records'].append(
                     {
-                        "name": record,
+                        "name": domain,
                         "type": "A",
                         "content": ipv4,
                         'ttl': int(config["CF"]["TTL"]),
@@ -350,50 +358,55 @@ def record_gen(tfk_subdomains: typing.List[dict],
                     }
                 )
             else:  # Append both A and AAA records
-                dns_record.append(
+                zones_to_update[zone]['records'].append(
                     {
-                        "name": record,
+                        "name": domain,
                         "type": "A",
                         "content": ipv4,
                         'ttl': int(config["CF"]["TTL"]),
                         'proxied': bool(config["CF"]["proxied"])
                     }
                 )
-                dns_record.append(
+                zones_to_update[zone]['records'].append(
                     {
-                        "name": record,
-                        "type": "AAA",
+                        "name": domain,
+                        "type": "AAAA",
                         "content": ipv6,
                         'ttl': int(config["CF"]["TTL"]),
                         'proxied': bool(config["CF"]["proxied"])
                     }
                 )
+    return zones_to_update
 
 
 @logger.catch
-def cf_add_record(dns_records: typing.List[dict],
-                  config: typing.MutableMapping,
-                  ipv6: typing.Union[str, bool]):
+def cf_add_record(zones_to_update: dict[dict],
+                  config: MutableMapping):
     """
     Add records to CF
-    :param dns_records: List of dns records to add
+    :param zones_to_update: List of dns records to add
     :param config: List of credentials and options
-    :param ipv6: Set IPv6 or disable switch
     :return:
     """
     try:
         cf_instance = CloudFlare.CloudFlare(token=config["CF"]["api_token"])
-    except CloudFlare.CloudFlareAPIError:
-        logger.exception("Cloudflare API Error")
+    except CloudFlare.exceptions.CloudFlareAPIError as e:
+        logger.exception(f"Cloudflare API Error: {e}")
         raise
-    for record in dns_records:
-        zone_id = record[0] if isinstance(record[0], dict) else None
-        record_data = record[1] if not ipv6 else (record[1], record[2])
+    for zone in zones_to_update.keys():
+        zone_id = zones_to_update[zone]["id"]  # Zone ID for the given zone
+        # All the records for the given zone
+        record_data = zones_to_update[zone]["records"]
         for data in record_data:
-            cf_instance.zones.dns_records.post(zone_id, data=data)
+            try:
+                cf_instance.zones.dns_records.post(
+                    zone_id, data=data)  # Post the record
+            except CloudFlare.exceptions.CloudFlareAPIError as e:
+                logger.exception(
+                    f"Record {data['name']} with record type {data['type']}: {e}")
 
 
-def ip(config: typing.MutableMapping) -> typing.Tuple[str, str | bool]:
+def ip(config: MutableMapping) -> tuple[str, str | bool]:
     """
     Grabs Public IP
 
@@ -401,6 +414,8 @@ def ip(config: typing.MutableMapping) -> typing.Tuple[str, str | bool]:
     .. todo:: Automatic IP fetching (will need to wait for CLI)
     :return:
     """
+    ipv4: str = ""
+    ipv6: str | bool = ""
     try:
         if validators.ipv4(config["Records"]["IPv4"]):
             ipv4 = config["Records"]["IPv4"]
@@ -428,19 +443,22 @@ def main():
     config = parse_config()  # Parse config file
     # CF
     # Get zones from the account and the parsed DNS ones
-    cf_zone_list, cf_domains = cf_get_zones(config)
+    cf_domains = cf_get_zones(config)
     # TFK
-    tfk_routers, tfk_domains = tfk_get_routers(
+    tfk_domains = tfk_get_routers(
         config)  # Get routers from the Traefik install
-    tfk_subdomains = utils_extract_subdomains(tfk_domains)
+    tfk_subdomains = split_subdomains(tfk_domains)
     # Checks
     cf_domains_verified, tfk_subdomains_verified = cf_check_tld_existence(
         cf_domains, tfk_subdomains)  # Checks what TLDs exist on the account
     tfk_subdomains_verified = cf_check_existence(
         cf_domains_verified, tfk_subdomains_verified, config)  # Check what subdomains are to be added
-    if len(tfk_subdomains_verified) < 1:
+    if len(tfk_subdomains_verified) < 1:  # If nothing to do
         logger.info("Nothing to do, exitting")
         exit(0)
+    records = gen_records(
+        tfk_subdomains_verified, cf_domains_verified, config)  # Generate records
+    cf_add_record(records, config)  # Add records to Cloudflare
 
 
 if __name__ == '__main__':

@@ -1,11 +1,13 @@
 [API]
 url = "https://api.example.com" # Traefik API endpoint URL
 auth = true # Is the endpoint under authentication
-user = "" # If not under auth, keep empty
+user = "" # If not under auth, keep both user and pass empty
 pass = ""
 
 [CF]
 api_token = "" # API token with ZONE:READ and DNS:WRITE permissions
+proxied = true
+TTL = 1
 
 [Records]
 IPv4 = "0.0.0.0" # Target IPv4
