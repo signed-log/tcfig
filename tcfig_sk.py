@@ -50,9 +50,6 @@ config_file_name = "config.toml"
 auth = True
 
 
-# FIXME: TLDS aren't recognized
-
-
 @logger.catch
 def parse_config() -> MutableMapping:
     """
