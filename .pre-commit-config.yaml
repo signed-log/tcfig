@@ -32,11 +32,11 @@ repos:
     rev: v3.8.2
     hooks:
       - id: reorder-python-imports
-  - repo: https://github.com/gvanderest/pylama-pre-commit
-    rev: 0.1.2
-    hooks:
-      - id: pylama
-        args: ["-i", "E501"]
+#  - repo: https://github.com/gvanderest/pylama-pre-commit
+#    rev: 0.1.2
+#    hooks:
+#      - id: pylama
+#        args: ["-i", "E501"]
   - repo: https://github.com/jumanjihouse/pre-commit-hooks
     rev: 2.1.6
     hooks:
