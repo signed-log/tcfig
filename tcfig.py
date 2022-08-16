@@ -37,27 +37,29 @@ legal = """
     in the United States and other jurisdictions.
     """
 
-g_dev_debug = True  # Dev debug switch with Backtrace and diagnosis on
+g_dev_debug = False  # Dev debug switch with Backtrace and diagnosis on
 
 # Logging setup
 
 if platform.system() == "Windows":
     logger.add("log_tcfig.log")
 elif not g_dev_debug:
-    syslog = SysLogHandler()
-    logger.add(syslog)
-    if platform.system() == "Darwin":
+    if platform.system() == "Linux":
+        logger.add("log_tcfig.log")
+    elif platform.system() == "Darwin":
         # TODO: Add to docs
+        syslog = SysLogHandler()
+        logger.add(syslog)
         logger.warning(
             "ASL (default SysLogHandler on MacOS), doesn't record INFO and DEBUG log priorities by default")
-elif g_dev_debug:
+if g_dev_debug:
     logger.add("g_dbg.log", backtrace=True, diagnose=True)
 
 g_domain_extractor = pydomainextractor.DomainExtractor()
 
 g_config_file_name = "config.toml"
 
-g_auth = True
+g_context_options = {'help_option_names': ['-h', '--help']}
 
 
 @logger.catch
@@ -491,7 +493,7 @@ def validate_config_file(ctx, param, value):
 # CLI
 
 
-@click.group()
+@click.group(context_settings=g_context_options)
 @click.option('--debug/--no-debug', default=False, help="Enable debug mode")
 @click.option("-c",
               "--config-file",
@@ -564,14 +566,15 @@ def main(ctx=None, c_config_file=g_config_file_name, c_check=True, c_post=False)
     :param c_config_file: Function parameter for the config file path.
         This is not used if the context is provided (when the CLI is not used, for exemple in a python console)
     :type c_config_file: bool, optional
-    :param c_check: Function parameter for the existence check
+    :param c_check: Function parameter for the existence check.
         This is not used if the context is provided (when the CLI is not used, for exemple in a python console)
     :type c_check: bool, optional
-    :param c_post: Function parameter for the CloudFlare's post
+    :param c_post: Function parameter for the CloudFlare's post.
         This is not used if the context is provided (when the CLI is not used, for exemple in a python console)
     :type c_post: bool, optional
     :return: Nothing
     """
+    logger.info("Starting up tcfig")
     if ctx is not None:
         config = parse_config(ctx.obj["CONFIG"])  # Parse config file
     else:  # If CLI is not ran, context will not be available
