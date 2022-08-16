@@ -19,8 +19,8 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="API Documentation" href="tcfig.html" />
-    <link rel="prev" title="Installation and use" href="use.html" />
+    <link rel="next" title="tcfig module" href="tcfig.html" />
+    <link rel="prev" title="Advanced use" href="advanced.html" />
 </head>
 
 <body class="wy-body-for-nav">
@@ -41,8 +41,18 @@
               <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="use.html">Installation and use</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Config file reference</a></li>
-<li class="toctree-l1"><a class="reference internal" href="tcfig.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced use</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Config file reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#example-config">Example config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reference">Reference</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#traefik">TRAEFIK</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#cloudflare">CLOUDFLARE</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ip">IP</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="tcfig.html">tcfig module</a></li>
 </ul>
 
         </div>
@@ -71,14 +81,148 @@
 
   <section id="config-file-reference">
 <h1>Config file reference<a class="headerlink" href="#config-file-reference" title="Permalink to this heading"></a></h1>
+<section id="example-config">
+<span id="cnf-example"></span><h2>Example config<a class="headerlink" href="#example-config" title="Permalink to this heading"></a></h2>
+<div class="highlight-TOML notranslate"><div class="highlight"><pre><span></span><span class="k">[TRAEFIK]</span><span class="w"></span>
+<span class="n">url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;https://api.example.com&quot;</span><span class="w"> </span><span class="c1"># Traefik API endpoint URL</span><span class="w"></span>
+<span class="n">auth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">true</span><span class="w"> </span><span class="c1"># Is the endpoint under authentication</span><span class="w"></span>
+<span class="n">user</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w"> </span><span class="c1"># If not under auth, keep both user and pass empty</span><span class="w"></span>
+<span class="n">pass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w"></span>
+
+<span class="k">[CLOUDFLARE]</span><span class="w"></span>
+<span class="n">api_token</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w"> </span><span class="c1"># API token with ZONE:READ and DNS:WRITE permissions</span><span class="w"></span>
+<span class="n">proxied</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w"></span>
+<span class="n">TTL</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">60</span><span class="w"></span>
+
+<span class="k">[IP]</span><span class="w"></span>
+<span class="n">IPv4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w"> </span><span class="c1"># Target IPv4</span><span class="w"></span>
+<span class="c1"># IPv6 = false # Uncomment this and comment (#) the other one to disable AAA records creation</span><span class="w"></span>
+<span class="n">IPv6</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w"> </span><span class="c1"># Target IPv6</span><span class="w"></span>
+</pre></div>
+</div>
+</section>
+<section id="reference">
+<span id="cnf-reference"></span><h2>Reference<a class="headerlink" href="#reference" title="Permalink to this heading"></a></h2>
+<section id="traefik">
+<span id="cnf-traefik"></span><h3>TRAEFIK<a class="headerlink" href="#traefik" title="Permalink to this heading"></a></h3>
+<p>This part treats about the Traefik API part of the config file</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 5%" />
+<col style="width: 39%" />
+<col style="width: 12%" />
+<col style="width: 44%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Usage</p></th>
+<th class="head"><p>Type expected</p></th>
+<th class="head"><p>Example</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>url</p></td>
+<td><p>URL for the API dashboard of Traefik</p></td>
+<td><p>str</p></td>
+<td><p>“<a class="reference external" href="https://api.example.com">https://api.example.com</a>”</p></td>
+</tr>
+<tr class="row-odd"><td><p>auth</p></td>
+<td><p>Is the endpoint under HTML basic authentication</p></td>
+<td><p>bool</p></td>
+<td><p>true</p></td>
+</tr>
+<tr class="row-even"><td colspan="4"><p>The following two options are to be kept empty (i.e. “”) if auth is false</p></td>
+</tr>
+<tr class="row-odd"><td><p>user</p></td>
+<td><p>Username for Traefik API authentication</p></td>
+<td><p>str</p></td>
+<td><p>“admin”</p></td>
+</tr>
+<tr class="row-even"><td><p>pass</p></td>
+<td><p>Password for Traefik API authentication</p></td>
+<td><p>str</p></td>
+<td><p>“$admin$$$3wds$” <em>(please use a more secure password)</em></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="cloudflare">
+<span id="cnf-cloudflare"></span><h3>CLOUDFLARE<a class="headerlink" href="#cloudflare" title="Permalink to this heading"></a></h3>
+<p>This part treats about the Cloudflare part of the config file</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 9%" />
+<col style="width: 47%" />
+<col style="width: 12%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Usage</p></th>
+<th class="head"><p>Type expected</p></th>
+<th class="head"><p>Example</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>api_token</p></td>
+<td><p>Cloudflare <a class="reference external" href="https://dash.cloudflare.com/profile/api-tokens">token</a> with zone:read and dns:write permissions</p></td>
+<td><p>str</p></td>
+<td><p>“W8421DNpetaNTx0fQBP34PFppBXICNKAU9l3JJF”</p></td>
+</tr>
+<tr class="row-odd"><td><p>proxied</p></td>
+<td><p>Wether to enable proxied switch on cloudflare</p></td>
+<td><p>bool</p></td>
+<td><p>true</p></td>
+</tr>
+<tr class="row-even"><td><p>TTL</p></td>
+<td><p>DNS TTL (you can read more about this <a class="reference external" href="https://www.varonis.com/blog/dns-ttl">here</a>)</p></td>
+<td><p>int</p></td>
+<td><p>60</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="ip">
+<span id="cnf-ip"></span><h3>IP<a class="headerlink" href="#ip" title="Permalink to this heading"></a></h3>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 7%" />
+<col style="width: 56%" />
+<col style="width: 19%" />
+<col style="width: 19%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Usage</p></th>
+<th class="head"><p>Type Expected</p></th>
+<th class="head"><p>Example</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>ipv4</p></td>
+<td><p>IPv4 address to set the records to point to</p></td>
+<td><p>str</p></td>
+<td><p>“0.0.0.0”</p></td>
+</tr>
+<tr class="row-odd"><td colspan="4"><p>Set the following variable to false (without any quote) to disable ipv6 records</p></td>
+</tr>
+<tr class="row-even"><td><p>ipv6</p></td>
+<td><p>IPv6 address to set the records to point to</p></td>
+<td><p>str</p></td>
+<td><p>“2001:db8::1”</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
 </section>
 
 
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="use.html" class="btn btn-neutral float-left" title="Installation and use" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="tcfig.html" class="btn btn-neutral float-right" title="API Documentation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="advanced.html" class="btn btn-neutral float-left" title="Advanced use" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="tcfig.html" class="btn btn-neutral float-right" title="tcfig module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

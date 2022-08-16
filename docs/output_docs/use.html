@@ -19,7 +19,7 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="&lt;no title&gt;" href="config.html" />
+    <link rel="next" title="Advanced use" href="advanced.html" />
     <link rel="prev" title="Welcome to tcfig’s documentation!" href="index.html" />
 </head>
 
@@ -40,8 +40,17 @@
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Installation and use</a></li>
-<li class="toctree-l1"><a class="reference internal" href="tcfig.html">API Documentation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Installation and use</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#preparation">Preparation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#config-file-preparation">Config file preparation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#traefik-configuration">Traefik configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#cloudflare-configuration">Cloudflare configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#run">Run</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced use</a></li>
+<li class="toctree-l1"><a class="reference internal" href="config.html">Config file reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tcfig.html">tcfig module</a></li>
 </ul>
 
         </div>
@@ -70,8 +79,69 @@
 
   <section id="installation-and-use">
 <h1>Installation and use<a class="headerlink" href="#installation-and-use" title="Permalink to this heading"></a></h1>
-<p>To use <em>tcfig</em>, you need to install <em>pipenv</em> so that it can manage the dependencies</p>
-<p>To do so, you can follow any of the <a class="reference external" href="https://pipenv.pypa.io/en/latest/install/" title="(in pipenv v2022.8.16.dev0)"><span>Pipenv &amp; Virtual Environments</span></a> in Pipenv documentation</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This guide is writen with Linux and MacOS in mind, but the script <em>should</em> work just fine on Windows</p>
+</div>
+<section id="preparation">
+<h2>Preparation<a class="headerlink" href="#preparation" title="Permalink to this heading"></a></h2>
+<p>To use <strong>tcfig</strong>, you need to install <strong>pipenv</strong> so that it can manage the appropriate dependencies</p>
+<p>To do so, you can follow any of the methods in <a class="reference external" href="https://pipenv.pypa.io/en/latest/install/" title="(in pipenv v2022.8.16.dev0)"><span>Pipenv &amp; Virtual Environments</span></a>, from the Pipenv documentation</p>
+<p>If you already have a python install, you can use the following commands to prepare the setup :</p>
+<div class="highlight-Bash notranslate"><div class="highlight"><pre><span></span>pip install --user pipenv
+git clone https://github.com/signed-log/tcfig.git
+<span class="nb">cd</span> tcfig
+pipenv install
+</pre></div>
+</div>
+</section>
+<section id="config-file-preparation">
+<span id="config-quickstart"></span><h2>Config file preparation<a class="headerlink" href="#config-file-preparation" title="Permalink to this heading"></a></h2>
+<p><strong>tcfig</strong> uses a <a class="reference external" href="https://toml.io/en/">TOML</a>-formatted config file for which you can find the sample as <code class="file docutils literal notranslate"><span class="pre">config_sample.toml</span></code></p>
+<p>It is expected in the same directory as the script under the <code class="file docutils literal notranslate"><span class="pre">config.toml</span></code> name</p>
+<p>Copy, using the appropriate</p>
+<div class="highlight-Bash notranslate"><div class="highlight"><pre><span></span>cp config_sample.toml config.toml
+</pre></div>
+</div>
+<p>the sample config to <code class="file docutils literal notranslate"><span class="pre">config.toml</span></code> and then fill it using the follwing sections and the <a class="reference internal" href="config.html#cnf-reference"><span class="std std-ref">Reference</span></a></p>
+</section>
+<section id="traefik-configuration">
+<span id="traefik-quickstart"></span><h2>Traefik configuration<a class="headerlink" href="#traefik-configuration" title="Permalink to this heading"></a></h2>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Please make sure to take the appropriate security measures, like authentication, while enabling the endpoint.</p>
+<p>More info about the implications is available on the Traefik docs’ <a class="reference external" href="https://doc.traefik.io/traefik/operations/api/#security">security</a> paragraph</p>
+</div>
+<p>By default, Traefik doesn’t expose the api endpoint required to run <strong>tcfig</strong></p>
+<p>To do so, you will need to follow the official <a class="reference external" href="https://doc.traefik.io/traefik/operations/api/">guide</a> from Traefik</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><strong>tcfig</strong> only supports either HTTP Basic Authentication or unauthenticated endpoints <em>not recommended</em>.</p>
+<p>It will not work with any authentication middleware that doesn’t have a BasicAuth facility</p>
+</div>
+</section>
+<section id="cloudflare-configuration">
+<span id="cloudflare-quickstart"></span><h2>Cloudflare configuration<a class="headerlink" href="#cloudflare-configuration" title="Permalink to this heading"></a></h2>
+<p><strong>tcfig</strong> needs a token with the appropriate permissions to access the DNS zones</p>
+<p>Those permissions are :</p>
+<p>Zone - Zone:Read and Zone - DNS:Write</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Make sure to select the appropriate (or all) <em>Zone Resources</em> when creating the token</p>
+</div>
+<p>Everything about this process is explained in the official <a class="reference external" href="https://developers.cloudflare.com/api/tokens/create">Cloudflare Documentation</a>.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>The token is only displayed once, make sure to put it in the <a class="reference internal" href="config.html#cnf-cloudflare"><span class="std std-ref">CLOUDFLARE</span></a> tag of the config file</p>
+</div>
+</section>
+<section id="run">
+<h2>Run<a class="headerlink" href="#run" title="Permalink to this heading"></a></h2>
+<p>After doing that you’re ready to go, inside the script’s directory, just run :</p>
+<div class="highlight-Bash notranslate"><div class="highlight"><pre><span></span>pipenv run tcfig.py run
+</pre></div>
+</div>
+</section>
 </section>
 
 
@@ -79,7 +149,7 @@
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="index.html" class="btn btn-neutral float-left" title="Welcome to tcfig’s documentation!" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="config.html" class="btn btn-neutral float-right" title="&lt;no title&gt;" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="advanced.html" class="btn btn-neutral float-right" title="Advanced use" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

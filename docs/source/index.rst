@@ -1,7 +1,7 @@
 Welcome to tcfig's documentation!
 =================================
 
-**tcfig** is a Python script mainly targeted to self-hosts *(note: this doesn't mean anyone else isn't permitted from using it :-) )* to sync the Traefik config with the appropriate records on Cloudflare DNSs
+**tcfig** is a Python script mainly targeted to self-hosts *(note: this doesn't mean anyone else isn't permitted from using it :-) )* to sync the Traefik config with the appropriate records on Cloudflare® DNSs
 
 .. note::
 
@@ -28,3 +28,7 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+
+.. note::
+    Cloudflare, the Cloudflare logo, and Cloudflare Workers are trademarks and/or registered trademarks of Cloudflare, Inc. in the United States and other jurisdictions.

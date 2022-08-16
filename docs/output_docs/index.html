@@ -40,8 +40,9 @@
               <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="use.html">Installation and use</a></li>
+<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced use</a></li>
 <li class="toctree-l1"><a class="reference internal" href="config.html">Config file reference</a></li>
-<li class="toctree-l1"><a class="reference internal" href="tcfig.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tcfig.html">API documentation</a></li>
 </ul>
 
         </div>
@@ -70,7 +71,7 @@
 
   <section id="welcome-to-tcfig-s-documentation">
 <h1>Welcome to tcfig’s documentation!<a class="headerlink" href="#welcome-to-tcfig-s-documentation" title="Permalink to this heading"></a></h1>
-<p><strong>tcfig</strong> is a Python script mainly targeted to self-hosts <em>(note: this doesn’t mean anyone else isn’t permitted from using it :-) )</em> to sync the Traefik config with the appropriate records on Cloudflare DNSs</p>
+<p><strong>tcfig</strong> is a Python script mainly targeted to self-hosts <em>(note: this doesn’t mean anyone else isn’t permitted from using it :-) )</em> to sync the Traefik config with the appropriate records on Cloudflare® DNSs</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>This project is in its infancy, feel free to see the <a class="reference external" href="https://github.com/signed-log/tcfig/projects/">Roadmap</a> for advancement in the project.</p>
@@ -78,9 +79,26 @@
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="use.html">Installation and use</a></li>
-<li class="toctree-l1"><a class="reference internal" href="config.html">Config file reference</a></li>
-<li class="toctree-l1"><a class="reference internal" href="tcfig.html">API Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="use.html">Installation and use</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="use.html#preparation">Preparation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="use.html#config-file-preparation">Config file preparation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="use.html#traefik-configuration">Traefik configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="use.html#cloudflare-configuration">Cloudflare configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="use.html#run">Run</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced use</a></li>
+<li class="toctree-l1"><a class="reference internal" href="config.html">Config file reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="config.html#example-config">Example config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config.html#reference">Reference</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="config.html#traefik">TRAEFIK</a></li>
+<li class="toctree-l3"><a class="reference internal" href="config.html#cloudflare">CLOUDFLARE</a></li>
+<li class="toctree-l3"><a class="reference internal" href="config.html#ip">IP</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="tcfig.html">API documentation</a></li>
 </ul>
 </div>
 </section>
@@ -91,6 +109,10 @@
 <li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
 <li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
 </ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Cloudflare, the Cloudflare logo, and Cloudflare Workers are trademarks and/or registered trademarks of Cloudflare, Inc. in the United States and other jurisdictions.</p>
+</div>
 </section>
 
 

@@ -20,7 +20,8 @@ release = '0.0.1a'
 
 extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.duration',
-              'sphinx.ext.intersphinx']
+              'sphinx.ext.intersphinx',
+              'sphinx.ext.autosectionlabel']
 
 intersphinx_mapping = {
     'pipenv': ('https://pipenv.pypa.io/en/latest/', None)
@@ -36,3 +37,7 @@ exclude_patterns = []
 html_theme = "sphinx_rtd_theme"
 html_static_path = ['_static']
 pygments_style = 'sphinx'
+
+rst_epilog = """
+.. |name| replace:: **tcfig**
+"""

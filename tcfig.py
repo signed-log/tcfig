@@ -17,7 +17,7 @@ from loguru import logger
 from requests.auth import HTTPBasicAuth
 
 legal = """
-    Link Traefik to Cloudflare DNS
+    Link Traefik to Cloudflare® DNS
     Copyright (C) 2O22 The tcfig authors
 
     This program is free software: you can redistribute it and/or modify
@@ -32,6 +32,9 @@ legal = """
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+    Cloudflare, the Cloudflare logo, Cloudflare DNS are trademarks and/or registered trademarks of Cloudflare, Inc.
+    in the United States and other jurisdictions.
     """
 
 g_dev_debug = True  # Dev debug switch with Backtrace and diagnosis on
@@ -109,7 +112,7 @@ def check_credentials(config: MutableMapping) -> bool:
 @logger.catch
 def cf_get_zones(config: MutableMapping) -> list[dict]:
     """
-    Query Cloudflare API and export the zones of the account
+    Query Cloudflare® API and export the zones of the account
 
     :param config: Parsed config file
     :return: Parsed domain lists
@@ -117,11 +120,12 @@ def cf_get_zones(config: MutableMapping) -> list[dict]:
     """
     try:
         # Instantiate a CF class
-        cf_instance = CloudFlare.CloudFlare(token=config["CLOUDFLARE"]["api_token"])
+        cf_instance = CloudFlare.CloudFlare(
+            token=config["CLOUDFLARE"]["api_token"])
         # Get the zone list
         cf_zone_list: list[dict] = cf_instance.zones.get()
     except CloudFlare.exceptions.CloudFlareAPIError:
-        logger.exception("Cloudflare API Error, your token is likely invalid")
+        logger.exception("Cloudflare® API Error, your token is likely invalid")
         raise
     # Returns the zone list
     if len(cf_zone_list) < 1:
@@ -201,9 +205,10 @@ def cf_check_existence(cf_domains: list[dict],
     """
     # Instantiate a CF class
     try:
-        cf_instance = CloudFlare.CloudFlare(token=config["CLOUDFLARE"]["api_token"])
+        cf_instance = CloudFlare.CloudFlare(
+            token=config["CLOUDFLARE"]["api_token"])
     except CloudFlare.exceptions.CloudFlareAPIError:
-        logger.exception("Cloudflare API Error")
+        logger.exception("Cloudflare® API Error")
         raise
     # Query a dump of the DNS zones
     dns_records = [cf_instance.zones.dns_records.get(
@@ -407,9 +412,10 @@ def cf_add_record(zones_to_update: dict[dict],
     :return: Nothing
     """
     try:
-        cf_instance = CloudFlare.CloudFlare(token=config["CLOUDFLARE"]["api_token"])
+        cf_instance = CloudFlare.CloudFlare(
+            token=config["CLOUDFLARE"]["api_token"])
     except CloudFlare.exceptions.CloudFlareAPIError as e:
-        logger.exception(f"Cloudflare API Error: {e}")
+        logger.exception(f"Cloudflare® API Error: {e}")
         raise
     for zone in zones_to_update.keys():
         zone_id = zones_to_update[zone]["id"]  # Zone ID for the given zone
@@ -524,7 +530,7 @@ def cli(ctx, debug, config_file, legal_print):
               "--post/--no-post",
               default=True,
               show_default=True,
-              help="Post the records to Cloudflare's API")
+              help="Post the records to Cloudflare®'s API")
 @click.option("-e/-E",
               "--check-exists/--no-exists-check",
               default=True,
@@ -590,8 +596,8 @@ def main(ctx=None, c_config_file=g_config_file_name, c_check=True, c_post=False)
     records = gen_records(
         tfk_subdomains_verified, cf_domains_verified, config)  # Generate records
     if (ctx is not None and ctx.obj["POST"]) or (ctx is None and c_post):
-        logger.info("Posting to Cloudflare")
-        cf_add_record(records, config)  # Add records to Cloudflare
+        logger.info("Posting to Cloudflare®")
+        cf_add_record(records, config)  # Add records to Cloudflare®
     else:
         logger.info("CloudFlare post routine bypassed")
         exit(0)
