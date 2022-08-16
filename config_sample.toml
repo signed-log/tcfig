@@ -1,15 +1,15 @@
-[API]
+[TRAEFIK]
 url = "https://api.example.com" # Traefik API endpoint URL
 auth = true # Is the endpoint under authentication
 user = "" # If not under auth, keep both user and pass empty
 pass = ""
 
-[CF]
+[CLOUDFLARE]
 api_token = "" # API token with ZONE:READ and DNS:WRITE permissions
 proxied = true
-TTL = 1
+TTL = 60
 
-[Records]
-IPv4 = "0.0.0.0" # Target IPv4
+[IP]
+IPv4 = "" # Target IPv4
 # IPv6 = false # Uncomment this and comment (#) the other one to disable AAA records creation
 IPv6 = "" # Target IPv6

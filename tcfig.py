@@ -89,11 +89,11 @@ def check_credentials(config: MutableMapping) -> bool:
     :rtype: bool
     """
     try:
-        if config['API']['auth']:
-            if config["API"]["user"] == "" or config["API"]["user"] is None:
+        if config['TRAEFIK']['auth']:
+            if config["TRAEFIK"]["user"] == "" or config["TRAEFIK"]["user"] is None:
                 logger.error("API endpoint username empty")
                 return False
-            if config["API"]["pass"] == "" or config["API"]["pass"] is None:
+            if config["TRAEFIK"]["pass"] == "" or config["TRAEFIK"]["pass"] is None:
                 logger.error("API endpoint password empty")
                 return False
     except KeyError:
@@ -117,7 +117,7 @@ def cf_get_zones(config: MutableMapping) -> list[dict]:
     """
     try:
         # Instantiate a CF class
-        cf_instance = CloudFlare.CloudFlare(token=config["CF"]["api_token"])
+        cf_instance = CloudFlare.CloudFlare(token=config["CLOUDFLARE"]["api_token"])
         # Get the zone list
         cf_zone_list: list[dict] = cf_instance.zones.get()
     except CloudFlare.exceptions.CloudFlareAPIError:
@@ -201,7 +201,7 @@ def cf_check_existence(cf_domains: list[dict],
     """
     # Instantiate a CF class
     try:
-        cf_instance = CloudFlare.CloudFlare(token=config["CF"]["api_token"])
+        cf_instance = CloudFlare.CloudFlare(token=config["CLOUDFLARE"]["api_token"])
     except CloudFlare.exceptions.CloudFlareAPIError:
         logger.exception("Cloudflare API Error")
         raise
@@ -238,9 +238,9 @@ def tfk_get_routers(config: MutableMapping) -> list[str]:
     :rtype: list
     """
     api_route: str = "/api/http/routers"  # API Route to dump router config
-    url: str = config["API"]["url"].rstrip("/") + api_route  # Create URL
+    url: str = config["TRAEFIK"]["url"].rstrip("/") + api_route  # Create URL
     # If the endpoint is not under authentication
-    if not config["API"]["auth"]:
+    if not config["TRAEFIK"]["auth"]:
         with requests.get(url) as api_query:
             api_query.raise_for_status()
             # Get the list of HTTP Routers
@@ -249,8 +249,8 @@ def tfk_get_routers(config: MutableMapping) -> list[str]:
             return tfk_domains
     else:
         # Only HTTPBasicAuth is currently supported
-        with requests.get(url, auth=HTTPBasicAuth(username=config["API"]["user"],
-                                                  password=config["API"]["pass"])) as api_query:
+        with requests.get(url, auth=HTTPBasicAuth(username=config["TRAEFIK"]["user"],
+                                                  password=config["TRAEFIK"]["pass"])) as api_query:
             api_query.raise_for_status()
             # Get the list of HTTP Routers
             tfk_routers: list[dict] = api_query.json()
@@ -368,8 +368,8 @@ def gen_records(tfk_subdomains: list[dict],
                         "name": domain,
                         "type": "A",
                         "content": ipv4,
-                        'ttl': int(config["CF"]["TTL"]),
-                        'proxied': bool(config["CF"]["proxied"])
+                        'ttl': int(config["CLOUDFLARE"]["TTL"]),
+                        'proxied': bool(config["CLOUDFLARE"]["proxied"])
                     }
                 )
             else:  # Append both A and AAA records
@@ -378,8 +378,8 @@ def gen_records(tfk_subdomains: list[dict],
                         "name": domain,
                         "type": "A",
                         "content": ipv4,
-                        'ttl': int(config["CF"]["TTL"]),
-                        'proxied': bool(config["CF"]["proxied"])
+                        'ttl': int(config["CLOUDFLARE"]["TTL"]),
+                        'proxied': bool(config["CLOUDFLARE"]["proxied"])
                     }
                 )
                 zones_to_update[zone]['records'].append(
@@ -387,8 +387,8 @@ def gen_records(tfk_subdomains: list[dict],
                         "name": domain,
                         "type": "AAAA",
                         "content": ipv6,
-                        'ttl': int(config["CF"]["TTL"]),
-                        'proxied': bool(config["CF"]["proxied"])
+                        'ttl': int(config["CLOUDFLARE"]["TTL"]),
+                        'proxied': bool(config["CLOUDFLARE"]["proxied"])
                     }
                 )
     return zones_to_update
@@ -407,7 +407,7 @@ def cf_add_record(zones_to_update: dict[dict],
     :return: Nothing
     """
     try:
-        cf_instance = CloudFlare.CloudFlare(token=config["CF"]["api_token"])
+        cf_instance = CloudFlare.CloudFlare(token=config["CLOUDFLARE"]["api_token"])
     except CloudFlare.exceptions.CloudFlareAPIError as e:
         logger.exception(f"Cloudflare API Error: {e}")
         raise
@@ -435,8 +435,8 @@ def ip(config: MutableMapping) -> tuple[str, str | bool]:
     ipv4: str = ""
     ipv6: str | bool = ""
     try:
-        if validators.ipv4(config["Records"]["IPv4"]):
-            ipv4 = config["Records"]["IPv4"]
+        if validators.ipv4(config["IP"]["IPv4"]):
+            ipv4 = config["IP"]["IPv4"]
         else:
             logger.error("Missing or invalid IPv4, aborting")
             exit(139)
@@ -444,9 +444,9 @@ def ip(config: MutableMapping) -> tuple[str, str | bool]:
         logger.error("Missing configuration key for IPv4 aborting")
         raise
     try:
-        if isinstance(config["Records"]["IPv6"], str) and validators.ipv6(config["Records"]["IPv6"]):
-            ipv6 = config["Records"]["IPv6"]
-        elif not config["Records"]["IPv6"]:
+        if isinstance(config["IP"]["IPv6"], str) and validators.ipv6(config["IP"]["IPv6"]):
+            ipv6 = config["IP"]["IPv6"]
+        elif not config["IP"]["IPv6"]:
             ipv6 = False
         else:
             logger.error("Missing or invalid IPv6, aborting")
@@ -499,7 +499,9 @@ def validate_config_file(ctx, param, value):
 @click.pass_context
 def cli(ctx, debug, config_file, legal_print):
     """
-    Main CLI handler
+    Syncs Traefik with CloudFlare DNS
+
+    \f
 
     :param ctx: Click context
     :param debug: Enable regular debug mode
@@ -532,7 +534,9 @@ def cli(ctx, debug, config_file, legal_print):
 @click.pass_context
 def run(ctx, post, check_exists):
     """
-    CLI handler for the run command
+    Run the script
+
+    \f
 
     :param ctx: Click context
     :param post: Bypass of the post routines
