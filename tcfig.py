@@ -45,9 +45,11 @@ if platform.system() == "Windows":
     logger.add("log_tcfig.log")
 elif not g_dev_debug:
     if platform.system() == "Linux":
+        # Default log handler is systemd-journald on most machines, which doesn't play well with SysLogHandler
         logger.add("log_tcfig.log")
     elif platform.system() == "Darwin":
         # TODO: Add to docs
+        # TODO: Need MacOS tests
         syslog = SysLogHandler()
         logger.add(syslog)
         logger.warning(
@@ -57,9 +59,10 @@ if g_dev_debug:
 
 g_domain_extractor = pydomainextractor.DomainExtractor()
 
-g_config_file_name = "config.toml"
+g_config_file_name = "config.toml"  # Default config file name
 
-g_context_options = {'help_option_names': ['-h', '--help']}
+g_context_options = {'help_option_names': [
+    '-h', '--help']}  # Help options for CLI
 
 
 def parse_config(filename=g_config_file_name) -> MutableMapping:
@@ -71,7 +74,8 @@ def parse_config(filename=g_config_file_name) -> MutableMapping:
     :return: Dict worth of credentials
     :rtype: MutableMapping
     """
-    if os.path.isfile(filename):  # Checks for config file existence
+    # Checks for config file existence
+    if os.path.isfile(filename):
         # Load credentials dict
         config = toml.load(open(filename, "rt"))
         if check_credentials(config):
@@ -130,7 +134,7 @@ def cf_get_zones(config: MutableMapping) -> list[dict]:
         raise
     # Returns the zone list
     if len(cf_zone_list) < 1:
-        logger.error("No zones on CF found")
+        logger.error("No zones on Cloudflare found")
         exit(121)
     cf_domains: list[dict] = cf_parse_zones(cf_zone_list)
     return cf_domains
@@ -362,13 +366,14 @@ def gen_records(tfk_subdomains: list[dict],
                     # Add the zone ID as a header to the dict list
                     zones_to_update[zone["name"]] = {
                         'id': zone['id'], 'domains': [], 'records': []}
+                # If the subdomain is empty, it would break, due to the leading .
                 zones_to_update[zone["name"]]["domains"].append(
                     f"{entry['subdomain']}.{entry['domain']}.{entry['suffix']}" if entry["subdomain"].isalnum()
                     else f"{entry['domain']}.{entry['suffix']}"
                 )
     for zone in zones_to_update.keys():
         for domain in zones_to_update[zone]['domains']:
-            if not ipv6:  # Only append A records if ipv6 is disabled
+            if not ipv6:  # Only append A records if IPv6 is disabled
                 zones_to_update[zone]['records'].append(
                     {
                         "name": domain,
@@ -378,7 +383,7 @@ def gen_records(tfk_subdomains: list[dict],
                         'proxied': bool(config["CLOUDFLARE"]["proxied"])
                     }
                 )
-            else:  # Append both A and AAA records
+            else:  # Append both A and AAAA records
                 zones_to_update[zone]['records'].append(
                     {
                         "name": domain,
@@ -438,6 +443,7 @@ def ip(config: MutableMapping) -> tuple[str, str | bool]:
     :return: ipv4 and ipv6 (address or disable switch)
     :rtype: tuple[str, str | bool]
     """
+    # TODO: Integrate into initial parsing
     ipv4: str = ""
     ipv6: str | bool = ""
     try:
@@ -479,7 +485,7 @@ def validate_config_file(ctx, param, value):
     """
     if value != g_config_file_name:
         try:
-            _ = toml.loads(value)
+            _ = toml.load(open(value, "rt"))  # Try loading the config file
         except toml.decoder.TomlDecodeError as e:
             logger.exception(f"Decoding error on config file : {e}")
             raise click.BadParameter(f"Decoding error on config file : {e}")
