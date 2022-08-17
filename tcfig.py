@@ -62,7 +62,6 @@ g_config_file_name = "config.toml"
 g_context_options = {'help_option_names': ['-h', '--help']}
 
 
-@logger.catch
 def parse_config(filename=g_config_file_name) -> MutableMapping:
     """
     Parse the TOML config file
@@ -111,7 +110,7 @@ def check_credentials(config: MutableMapping) -> bool:
 
 # CF
 
-@logger.catch
+
 def cf_get_zones(config: MutableMapping) -> list[dict]:
     """
     Query Cloudflare® API and export the zones of the account
@@ -235,7 +234,7 @@ def cf_check_existence(cf_domains: list[dict],
 
 # TRAEFIK :
 
-@logger.catch
+
 def tfk_get_routers(config: MutableMapping) -> list[str]:
     """
     Query Traefik API for the list of the HTTP Routers
@@ -401,7 +400,6 @@ def gen_records(tfk_subdomains: list[dict],
     return zones_to_update
 
 
-@logger.catch
 def cf_add_record(zones_to_update: dict[dict],
                   config: MutableMapping) -> None:
     """
@@ -526,7 +524,6 @@ def cli(ctx, debug, config_file, legal_print):
     ctx.obj["CONFIG"] = config_file
 
 
-@logger.catch
 @cli.command()
 @click.option("-p/-P",
               "--post/--no-post",
