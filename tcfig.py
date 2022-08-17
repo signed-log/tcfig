@@ -62,7 +62,6 @@ g_config_file_name = "config.toml"
 g_context_options = {'help_option_names': ['-h', '--help']}
 
 
-@logger.catch
 def parse_config(filename=g_config_file_name) -> MutableMapping:
     """
     Parse the TOML config file
@@ -74,11 +73,16 @@ def parse_config(filename=g_config_file_name) -> MutableMapping:
     """
     if os.path.isfile(filename):  # Checks for config file existence
         # Load credentials dict
-        config = toml.load(open(filename, "rt"))
+        try:
+            config = toml.load(open(filename, "rt"))
+        except toml.TomlDecodeError as e:
+            logger.exception(f"Decode error on config file : {e}")
+            raise
         if check_credentials(config):
             return config
         else:
             logger.exception("Credentials are invalid")
+            exit(119)
     else:
         logger.exception("Config File not found")
         raise FileNotFoundError
@@ -93,6 +97,8 @@ def check_credentials(config: MutableMapping) -> bool:
     :return: Validity of the credentials provided
     :rtype: bool
     """
+    check_config_structure(config)
+    check_config_values()
     try:
         if config['TRAEFIK']['auth']:
             if config["TRAEFIK"]["user"] == "" or config["TRAEFIK"]["user"] is None:
@@ -109,9 +115,59 @@ def check_credentials(config: MutableMapping) -> bool:
         return True
 
 
+def check_config_values(config: MutableMapping) -> None:
+    # Types for config validation
+    needs_bool = [config["TRAEFIK"]["auth"],
+                  config["CLOUDFLARE"]["proxied"]]
+    needs_str = [config["TRAEFIK"]["url"],
+                 config["CLOUDFLARE"]["api_token"],
+                 config["IP"]["IPv4"]]
+    needs_int = [config["CLOUDFLARE"]["TTL"]]
+    can_be_empty = [config["TRAEFIK"]["user"],
+                    config["TRAEFIK"]["pass"]]  # In case auth is to false
+
+    if not isinstance(all(needs_bool), bool) or \
+            not isinstance(all(needs_str), str) or \
+            not isinstance(all(needs_int), int):
+        logger.error("Wrong types provided")
+        raise TypeError
+    if config["TRAEFIK"]["auth"] and "" in can_be_empty:
+        logger.error("Missing credentials")
+        raise ValueError
+    if not isinstance(config["IP"]["IPv6"], bool):
+        if config["IP"]["IPv6"] == "":
+            logger.error("IPv6 empty")
+            raise ValueError
+
+
+def check_config_structure(config: MutableMapping) -> None:
+    """
+    Checks for the config file structure validity
+
+    :param config: Parsed config file
+    :return: Nothing
+    :rtype: None
+    :raise ValueError: If the config file is invalid
+    """
+    # Compare the structure to the valid structure
+    all_keys = []
+    valid = ['TRAEFIK', ['url', 'auth', 'user', 'pass'],
+             'CLOUDFLARE', ['api_token', 'proxied', 'TTL'],
+             'IP', ['IPv4', 'IPv6']]  # Valid tree-view of the config
+    # List all keys
+    for key in config.keys():
+        if isinstance(config[key], dict):
+            all_keys.append(key)
+            all_keys.append(list(config[key].keys()))
+        else:
+            all_keys.append(key)
+    if valid != all_keys:
+        logger.error("Invalid structure of the config file")
+        raise ValueError
+
 # CF
 
-@logger.catch
+
 def cf_get_zones(config: MutableMapping) -> list[dict]:
     """
     Query Cloudflare® API and export the zones of the account
@@ -235,7 +291,7 @@ def cf_check_existence(cf_domains: list[dict],
 
 # TRAEFIK :
 
-@logger.catch
+
 def tfk_get_routers(config: MutableMapping) -> list[str]:
     """
     Query Traefik API for the list of the HTTP Routers
@@ -288,7 +344,7 @@ def tfk_parse_routers(tfk_routers: list[dict]) -> list[str]:
                 basic_host_rules.append(router['rule'])
     if len(basic_host_rules) < 1:
         logger.error("No basic rules found for Traefik, exiting")
-        exit(120)
+        exit(123)
     tfk_domains = tfk_parse_basic_rules(host_rules=basic_host_rules)
     if len(logical_host_rules) > 0:
         logger.warning("Logical rules aren't implemented and will be ignored")
@@ -401,7 +457,6 @@ def gen_records(tfk_subdomains: list[dict],
     return zones_to_update
 
 
-@logger.catch
 def cf_add_record(zones_to_update: dict[dict],
                   config: MutableMapping) -> None:
     """
@@ -447,7 +502,7 @@ def ip(config: MutableMapping) -> tuple[str, str | bool]:
             ipv4 = config["IP"]["IPv4"]
         else:
             logger.error("Missing or invalid IPv4, aborting")
-            exit(139)
+            exit(124)
     except KeyError:
         logger.error("Missing configuration key for IPv4 aborting")
         raise
@@ -458,7 +513,7 @@ def ip(config: MutableMapping) -> tuple[str, str | bool]:
             ipv6 = False
         else:
             logger.error("Missing or invalid IPv6, aborting")
-            exit(140)
+            exit(125)
     except KeyError:
         logger.error("Missing configuration key for IPv6, aborting")
         raise
@@ -526,7 +581,6 @@ def cli(ctx, debug, config_file, legal_print):
     ctx.obj["CONFIG"] = config_file
 
 
-@logger.catch
 @cli.command()
 @click.option("-p/-P",
               "--post/--no-post",

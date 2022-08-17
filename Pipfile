@@ -19,6 +19,7 @@ autopep8 = "*"
 coverage = "*"
 sphinx = "5.1.1"
 sphinx-rtd-theme = ">0.3.0"
+pytest = "*"
 
 [requires]
 python_version = "3"
