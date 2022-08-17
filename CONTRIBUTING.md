@@ -2,6 +2,10 @@
 
 Contributing to this project is highly appreciated and encouraged, but you will need to follow some guidelines
 
+## Code Of Conduct
+
+As a contributor (either by contributing to the program or by opening issues for ex.), you are required to abide by the [Code of Conduct](CODE_OF_CONDUCT.md)
+
 
 ## Branch policy
 
