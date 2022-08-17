@@ -1,5 +1,5 @@
-API documentation
-=================
+tcfig module
+============
 
 .. automodule:: tcfig
    :members:

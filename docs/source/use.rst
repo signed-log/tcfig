@@ -30,13 +30,11 @@ Config file preparation
 
 It is expected in the same directory as the script under the :file:`config.toml` name
 
-Copy, using the appropriate
+Copy the sample config to :file:`config.toml` and then fill it using the follwing sections and the :ref:`cnf_reference`
 
 .. code-block:: Bash
 
     cp config_sample.toml config.toml
-
-the sample config to :file:`config.toml` and then fill it using the follwing sections and the :ref:`cnf_reference`
 
 .. _TOML: https://toml.io/en/
 
@@ -83,6 +81,16 @@ Everything about this process is explained in the official `Cloudflare Documenta
     The token is only displayed once, make sure to put it in the :ref:`cnf_cloudflare` tag of the config file
 
 .. _Cloudflare Documentation: https://developers.cloudflare.com/api/tokens/create
+
+IP setting
+----------
+
+Set the IP addresses, IPv4 and *(optionnaly)* IPv6 for which the records are to point to
+
+.. note::
+
+    IPv6-only mode will come a bit later down the line
+
 
 Run
 ---

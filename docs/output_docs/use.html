@@ -45,6 +45,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#config-file-preparation">Config file preparation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#traefik-configuration">Traefik configuration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#cloudflare-configuration">Cloudflare configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#ip-setting">IP setting</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#run">Run</a></li>
 </ul>
 </li>
@@ -99,11 +100,10 @@ pipenv install
 <span id="config-quickstart"></span><h2>Config file preparation<a class="headerlink" href="#config-file-preparation" title="Permalink to this heading"></a></h2>
 <p><strong>tcfig</strong> uses a <a class="reference external" href="https://toml.io/en/">TOML</a>-formatted config file for which you can find the sample as <code class="file docutils literal notranslate"><span class="pre">config_sample.toml</span></code></p>
 <p>It is expected in the same directory as the script under the <code class="file docutils literal notranslate"><span class="pre">config.toml</span></code> name</p>
-<p>Copy, using the appropriate</p>
+<p>Copy the sample config to <code class="file docutils literal notranslate"><span class="pre">config.toml</span></code> and then fill it using the follwing sections and the <a class="reference internal" href="config.html#cnf-reference"><span class="std std-ref">Reference</span></a></p>
 <div class="highlight-Bash notranslate"><div class="highlight"><pre><span></span>cp config_sample.toml config.toml
 </pre></div>
 </div>
-<p>the sample config to <code class="file docutils literal notranslate"><span class="pre">config.toml</span></code> and then fill it using the follwing sections and the <a class="reference internal" href="config.html#cnf-reference"><span class="std std-ref">Reference</span></a></p>
 </section>
 <section id="traefik-configuration">
 <span id="traefik-quickstart"></span><h2>Traefik configuration<a class="headerlink" href="#traefik-configuration" title="Permalink to this heading"></a></h2>
@@ -133,6 +133,14 @@ pipenv install
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
 <p>The token is only displayed once, make sure to put it in the <a class="reference internal" href="config.html#cnf-cloudflare"><span class="std std-ref">CLOUDFLARE</span></a> tag of the config file</p>
+</div>
+</section>
+<section id="ip-setting">
+<h2>IP setting<a class="headerlink" href="#ip-setting" title="Permalink to this heading"></a></h2>
+<p>Set the IP addresses, IPv4 and <em>(optionnaly)</em> IPv6 for which the records are to point to</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>IPv6-only mode will come a bit later down the line</p>
 </div>
 </section>
 <section id="run">
